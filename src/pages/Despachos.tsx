@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Pencil, Settings, Trash2 } from 'lucide-react';
 import { useApp, type CatalogItem } from '../context/AppContext';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
 type CatalogModalType = 'labor' | 'supervisor' | 'bodega' | null;
+type CatalogManagerType = 'labor' | 'supervisor' | 'bodega' | null;
 
 export default function Despachos() {
   const {
@@ -18,10 +19,13 @@ export default function Despachos() {
 
   const [success, setSuccess] = useState(false);
   const [materialSearch, setMaterialSearch] = useState('');
-  const [showSugg, setShowSugg] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [laborFilter, setLaborFilter] = useState('');
   const [catalogModal, setCatalogModal] = useState<CatalogModalType>(null);
   const [catalogName, setCatalogName] = useState('');
+  const [catalogManager, setCatalogManager] = useState<CatalogManagerType>(null);
+  const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+  const [editingCatalogName, setEditingCatalogName] = useState('');
   const [form, setForm] = useState({
     materialId: '',
     cantidad: 0,
@@ -115,6 +119,99 @@ export default function Despachos() {
     setCatalogName('');
   };
 
+  const openCatalogManager = (type: CatalogManagerType) => {
+    setCatalogManager(type);
+    setEditingCatalogId(null);
+    setEditingCatalogName('');
+  };
+
+  const getCatalogItems = () => {
+    if (catalogManager === 'labor') {
+      return state.laboresActividad;
+    }
+    if (catalogManager === 'supervisor') {
+      return state.supervisores;
+    }
+    if (catalogManager === 'bodega') {
+      return state.bodegas;
+    }
+    return [];
+  };
+
+  const startCatalogEdit = (item: CatalogItem) => {
+    setEditingCatalogId(item.id);
+    setEditingCatalogName(item.nombre);
+  };
+
+  const saveCatalogEdit = () => {
+    const nombre = editingCatalogName.trim();
+    if (!catalogManager || !editingCatalogId || !nombre) {
+      return;
+    }
+
+    if (catalogManager === 'labor') {
+      const previous = state.laboresActividad.find((item) => item.id === editingCatalogId)?.nombre;
+      saveLaboresActividad(
+        state.laboresActividad.map((item) =>
+          item.id === editingCatalogId ? { ...item, nombre } : item
+        )
+      );
+      if (form.labor === previous) {
+        setForm((current) => ({ ...current, labor: nombre }));
+      }
+    }
+
+    if (catalogManager === 'supervisor') {
+      const previous = state.supervisores.find((item) => item.id === editingCatalogId)?.nombre;
+      saveSupervisores(
+        state.supervisores.map((item) =>
+          item.id === editingCatalogId ? { ...item, nombre } : item
+        )
+      );
+      if (form.supervisor === previous) {
+        setForm((current) => ({ ...current, supervisor: nombre }));
+      }
+    }
+
+    if (catalogManager === 'bodega') {
+      const previous = state.bodegas.find((item) => item.id === editingCatalogId)?.nombre;
+      saveBodegas(
+        state.bodegas.map((item) =>
+          item.id === editingCatalogId ? { ...item, nombre } : item
+        )
+      );
+      if (form.bodegaOrigen === previous) {
+        setForm((current) => ({ ...current, bodegaOrigen: nombre }));
+      }
+    }
+
+    setEditingCatalogId(null);
+    setEditingCatalogName('');
+  };
+
+  const deleteCatalogItem = (item: CatalogItem) => {
+    if (catalogManager === 'labor') {
+      saveLaboresActividad(state.laboresActividad.filter((current) => current.id !== item.id));
+      if (form.labor === item.nombre) {
+        setForm((current) => ({ ...current, labor: '' }));
+      }
+    }
+
+    if (catalogManager === 'supervisor') {
+      saveSupervisores(state.supervisores.filter((current) => current.id !== item.id));
+      if (form.supervisor === item.nombre) {
+        setForm((current) => ({ ...current, supervisor: '' }));
+      }
+    }
+
+    if (catalogManager === 'bodega') {
+      saveBodegas(state.bodegas.filter((current) => current.id !== item.id));
+      if (form.bodegaOrigen === item.nombre) {
+        setForm((current) => ({ ...current, bodegaOrigen: '' }));
+      }
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       {success && (
@@ -136,13 +233,14 @@ export default function Despachos() {
               value={materialSearch}
               onChange={(e) => {
                 setMaterialSearch(e.target.value);
-                setShowSugg(true);
+                setForm({ ...form, materialId: '' });
+                setShowSuggestions(true);
               }}
-              onFocus={() => setShowSugg(true)}
+              onFocus={() => setShowSuggestions(true)}
               className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
-              placeholder="Buscar..."
+              placeholder="Buscar por código o descripción..."
             />
-            {showSugg && suggestions.length > 0 && (
+            {showSuggestions && suggestions.length > 0 && (
               <div className="absolute z-10 top-full mt-1 w-full bg-white border border-[#E2E6EF] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                 {suggestions.map((material) => (
                   <button
@@ -151,7 +249,7 @@ export default function Despachos() {
                     onClick={() => {
                       setForm({ ...form, materialId: String(material.id) });
                       setMaterialSearch(material.codigo);
-                      setShowSugg(false);
+                      setShowSuggestions(false);
                     }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-[#E8672C]/5"
                   >
@@ -211,6 +309,13 @@ export default function Despachos() {
               >
                 +
               </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('labor')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
+              </button>
             </div>
           </div>
           <div>
@@ -235,6 +340,13 @@ export default function Despachos() {
               >
                 +
               </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('supervisor')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
+              </button>
             </div>
           </div>
           <div>
@@ -258,6 +370,13 @@ export default function Despachos() {
                 className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
               >
                 +
+              </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('bodega')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
               </button>
             </div>
           </div>
@@ -352,6 +471,56 @@ export default function Despachos() {
             </Button>
             <Button onClick={createCatalogItem}>Guardar</Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={catalogManager !== null}
+        onClose={() => {
+          setCatalogManager(null);
+          setEditingCatalogId(null);
+          setEditingCatalogName('');
+        }}
+        title={
+          catalogManager === 'labor'
+            ? 'Gestionar labores'
+            : catalogManager === 'supervisor'
+              ? 'Gestionar supervisores'
+              : 'Gestionar bodegas'
+        }
+        size="md"
+      >
+        <div className="space-y-3">
+          {getCatalogItems().map((item) => (
+            <div key={item.id} className="flex items-center gap-3 border border-[#E2E6EF] rounded-lg px-3 py-2">
+              {editingCatalogId === item.id ? (
+                <input
+                  value={editingCatalogName}
+                  onChange={(e) => setEditingCatalogName(e.target.value)}
+                  className="flex-1 border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+                />
+              ) : (
+                <span className="flex-1 text-sm text-[#1B2A4A]">{item.nombre}</span>
+              )}
+              {editingCatalogId === item.id ? (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={saveCatalogEdit}>Guardar</Button>
+                  <Button size="sm" variant="secondary" onClick={() => { setEditingCatalogId(null); setEditingCatalogName(''); }}>
+                    Cancelar
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => startCatalogEdit(item)} className="p-2 rounded-lg text-[#1B2A4A] hover:bg-gray-100">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => deleteCatalogItem(item)} className="p-2 rounded-lg text-red-600 hover:bg-red-50">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </Modal>
     </motion.div>

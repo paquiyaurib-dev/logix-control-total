@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Pencil, Settings, Trash2 } from 'lucide-react';
 import { useApp, type MovementClassItem } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
 type CatalogModalType = 'proveedor' | 'clase' | null;
+type CatalogManagerType = 'proveedor' | 'clase' | null;
 
 export default function Ingresos() {
   const {
@@ -21,6 +22,12 @@ export default function Ingresos() {
   const [catalogModal, setCatalogModal] = useState<CatalogModalType>(null);
   const [catalogName, setCatalogName] = useState('');
   const [catalogCode, setCatalogCode] = useState('');
+  const [catalogManager, setCatalogManager] = useState<CatalogManagerType>(null);
+  const [editingCatalogId, setEditingCatalogId] = useState<string | number | null>(null);
+  const [editingCatalogName, setEditingCatalogName] = useState('');
+  const [editingCatalogCode, setEditingCatalogCode] = useState('');
+  const [materialSearch, setMaterialSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
     materialId: '',
@@ -37,6 +44,20 @@ export default function Ingresos() {
     () => state.clasesMovimiento.filter((item) => item.value.startsWith('1')),
     [state.clasesMovimiento]
   );
+
+  const materialSuggestions = useMemo(() => {
+    const term = materialSearch.trim().toLowerCase();
+    if (!term) {
+      return state.materiales.slice(0, 8);
+    }
+    return state.materiales
+      .filter(
+        (material) =>
+          material.codigo.toLowerCase().includes(term) ||
+          material.descripcion.toLowerCase().includes(term)
+      )
+      .slice(0, 8);
+  }, [materialSearch, state.materiales]);
 
   const selectedMaterial = state.materiales.find(
     (material) => material.id === Number(form.materialId)
@@ -76,6 +97,7 @@ export default function Ingresos() {
       supervisor: '',
       observaciones: '',
     });
+    setMaterialSearch('');
   };
 
   const createCatalogItem = () => {
@@ -116,6 +138,82 @@ export default function Ingresos() {
     setCatalogCode('');
   };
 
+  const openCatalogManager = (type: CatalogManagerType) => {
+    setCatalogManager(type);
+    setEditingCatalogId(null);
+    setEditingCatalogName('');
+    setEditingCatalogCode('');
+  };
+
+  const startCatalogEdit = (item: { id: string | number; nombre?: string; razonSocial?: string; value?: string; label?: string }) => {
+    setEditingCatalogId(item.id);
+    if (catalogManager === 'proveedor') {
+      setEditingCatalogName(item.razonSocial ?? '');
+      setEditingCatalogCode('');
+    }
+    if (catalogManager === 'clase') {
+      setEditingCatalogCode(item.value ?? '');
+      setEditingCatalogName(item.label?.split('-').slice(1).join('-') ?? '');
+    }
+  };
+
+  const saveCatalogEdit = () => {
+    if (!catalogManager || editingCatalogId === null) {
+      return;
+    }
+
+    if (catalogManager === 'proveedor') {
+      const razonSocial = editingCatalogName.trim();
+      if (!razonSocial) {
+        return;
+      }
+      saveProveedores(
+        state.proveedores.map((item) =>
+          item.id === editingCatalogId ? { ...item, razonSocial } : item
+        )
+      );
+    }
+
+    if (catalogManager === 'clase') {
+      const code = editingCatalogCode.trim();
+      const label = editingCatalogName.trim();
+      if (!code || !label) {
+        return;
+      }
+      saveClasesMovimiento(
+        state.clasesMovimiento.map((item) =>
+          item.id === editingCatalogId
+            ? { ...item, value: code, label: `${code}-${label}` }
+            : item
+        )
+      );
+      if (form.clase === state.clasesMovimiento.find((item) => item.id === editingCatalogId)?.value) {
+        setForm((current) => ({ ...current, clase: code }));
+      }
+    }
+
+    setEditingCatalogId(null);
+    setEditingCatalogName('');
+    setEditingCatalogCode('');
+  };
+
+  const deleteCatalogItem = (id: string | number) => {
+    if (catalogManager === 'proveedor') {
+      saveProveedores(state.proveedores.filter((item) => item.id !== id));
+      if (form.proveedorId === String(id)) {
+        setForm((current) => ({ ...current, proveedorId: '' }));
+      }
+    }
+
+    if (catalogManager === 'clase') {
+      const currentValue = state.clasesMovimiento.find((item) => item.id === id)?.value;
+      saveClasesMovimiento(state.clasesMovimiento.filter((item) => item.id !== id));
+      if (form.clase === currentValue) {
+        setForm((current) => ({ ...current, clase: '' }));
+      }
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       {success && (
@@ -140,20 +238,46 @@ export default function Ingresos() {
               className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Material</label>
-            <select
-              value={form.materialId}
-              onChange={(e) => setForm({ ...form, materialId: e.target.value })}
+            <input
+              value={materialSearch}
+              onChange={(e) => {
+                setMaterialSearch(e.target.value);
+                setForm({ ...form, materialId: '' });
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Buscar por código o descripción..."
               className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
-            >
-              <option value="">Seleccionar...</option>
-              {state.materiales.map((material) => (
-                <option key={material.id} value={material.id}>
-                  {material.codigo} - {material.descripcion}
-                </option>
-              ))}
-            </select>
+            />
+            {showSuggestions && materialSuggestions.length > 0 && (
+              <div className="absolute z-10 top-full mt-1 w-full bg-white border border-[#E2E6EF] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {materialSuggestions.map((material) => (
+                  <button
+                    key={material.id}
+                    type="button"
+                    onClick={() => {
+                      setForm({ ...form, materialId: String(material.id) });
+                      setMaterialSearch(material.codigo);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-[#E8672C]/5"
+                  >
+                    <span className="font-medium">{material.codigo}</span> —{' '}
+                    <span className="text-[#6B7A99]">{material.descripcion}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Descripción</label>
+            <input
+              readOnly
+              value={selectedMaterial?.descripcion || ''}
+              className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm bg-gray-50 text-[#6B7A99]"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Cantidad</label>
@@ -195,6 +319,13 @@ export default function Ingresos() {
               >
                 +
               </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('proveedor')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
+              </button>
             </div>
           </div>
           <div>
@@ -218,6 +349,13 @@ export default function Ingresos() {
                 className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
               >
                 +
+              </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('clase')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
               </button>
             </div>
           </div>
@@ -324,6 +462,91 @@ export default function Ingresos() {
             </Button>
             <Button onClick={createCatalogItem}>Guardar</Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={catalogManager !== null}
+        onClose={() => {
+          setCatalogManager(null);
+          setEditingCatalogId(null);
+          setEditingCatalogName('');
+          setEditingCatalogCode('');
+        }}
+        title={catalogManager === 'proveedor' ? 'Gestionar proveedores' : 'Gestionar clases de movimiento'}
+        size="lg"
+      >
+        <div className="space-y-3">
+          {catalogManager === 'proveedor' &&
+            state.proveedores.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 border border-[#E2E6EF] rounded-lg px-3 py-2">
+                {editingCatalogId === item.id ? (
+                  <input
+                    value={editingCatalogName}
+                    onChange={(e) => setEditingCatalogName(e.target.value)}
+                    className="flex-1 border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+                  />
+                ) : (
+                  <span className="flex-1 text-sm text-[#1B2A4A]">{item.razonSocial}</span>
+                )}
+                {editingCatalogId === item.id ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveCatalogEdit}>Guardar</Button>
+                    <Button size="sm" variant="secondary" onClick={() => { setEditingCatalogId(null); setEditingCatalogName(''); }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => startCatalogEdit(item)} className="p-2 rounded-lg text-[#1B2A4A] hover:bg-gray-100">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => deleteCatalogItem(item.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+          {catalogManager === 'clase' &&
+            state.clasesMovimiento.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 border border-[#E2E6EF] rounded-lg px-3 py-2">
+                {editingCatalogId === item.id ? (
+                  <div className="flex flex-1 gap-2">
+                    <input
+                      value={editingCatalogCode}
+                      onChange={(e) => setEditingCatalogCode(e.target.value)}
+                      className="w-28 border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+                    />
+                    <input
+                      value={editingCatalogName}
+                      onChange={(e) => setEditingCatalogName(e.target.value)}
+                      className="flex-1 border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+                    />
+                  </div>
+                ) : (
+                  <span className="flex-1 text-sm text-[#1B2A4A]">{item.label}</span>
+                )}
+                {editingCatalogId === item.id ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveCatalogEdit}>Guardar</Button>
+                    <Button size="sm" variant="secondary" onClick={() => { setEditingCatalogId(null); setEditingCatalogName(''); setEditingCatalogCode(''); }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => startCatalogEdit(item)} className="p-2 rounded-lg text-[#1B2A4A] hover:bg-gray-100">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => deleteCatalogItem(item.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
       </Modal>
     </motion.div>
