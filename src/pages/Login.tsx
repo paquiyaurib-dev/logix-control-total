@@ -19,8 +19,7 @@ export default function Login() {
     setError('');
     setLoading(true);
 
-    // Simulate a brief network delay
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     const success = login(username, password);
     if (success) {
@@ -39,22 +38,18 @@ export default function Login() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="w-full max-w-md bg-white rounded-xl shadow-lg p-8"
       >
-        {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="font-display text-4xl font-bold text-[#1B2A4A]">
-            LOGIX
-          </h1>
-          <p className="text-sm tracking-[0.3em] text-[#E8672C] font-medium mt-1">
-            CONTROL TOTAL
-          </p>
+          <img
+            src="/logo-ams.png"
+            alt="AMS Control Logístico"
+            className="h-[80px] w-auto object-contain mx-auto"
+          />
           <p className="text-[#6B7A99] text-sm mt-3">
             Sistema de Control Logístico Integral
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Username */}
           <div>
             <label
               htmlFor="username"
@@ -78,7 +73,6 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Password */}
           <div>
             <label
               htmlFor="password"
@@ -113,12 +107,10 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Error message */}
           {error && (
             <p className="text-red-500 text-sm text-center">{error}</p>
           )}
 
-          {/* Submit button */}
           <button
             type="submit"
             disabled={loading}
@@ -153,27 +145,6 @@ export default function Login() {
             )}
           </button>
         </form>
-
-        {/* Demo credentials hint */}
-        <div className="mt-6 pt-5 border-t border-[#E2E6EF]">
-          <p className="text-xs text-[#6B7A99] text-center mb-2">
-            Usuarios de demostración
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-[#6B7A99]">
-            <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5">
-              <span className="font-medium text-[#1B2A4A]">admin</span> / admin123
-            </div>
-            <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5">
-              <span className="font-medium text-[#1B2A4A]">supervisor</span> / sup123
-            </div>
-            <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5">
-              <span className="font-medium text-[#1B2A4A]">bodeguero</span> / bod123
-            </div>
-            <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5">
-              <span className="font-medium text-[#1B2A4A]">consulta</span> / con123
-            </div>
-          </div>
-        </div>
       </motion.div>
     </div>
   );

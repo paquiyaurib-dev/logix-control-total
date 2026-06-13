@@ -38,8 +38,14 @@ export default function Sidebar({ isExpanded, onToggle, onExpand, onCollapse }: 
       <div className="px-3 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <div className={`${isExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-150`}>
-            <h1 className="font-display text-xl font-bold tracking-wider whitespace-nowrap">LOGIX</h1>
-            <p className="text-[10px] tracking-[0.28em] text-[#E8672C] font-medium whitespace-nowrap">CONTROL TOTAL</p>
+            <img
+              src="/logo-ams.png"
+              alt="AMS"
+              className="h-[50px] w-auto object-contain"
+            />
+            <p className="text-[10px] tracking-[0.28em] text-[#E8672C] font-medium whitespace-nowrap mt-2">
+              CONTROL LOGÍSTICO
+            </p>
           </div>
           <button
             onClick={onToggle}
