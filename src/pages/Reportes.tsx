@@ -7,6 +7,8 @@ import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 
 const fmtPEN = (v: number) => v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDateTime = () => new Date().toLocaleString('es-PE');
+type ReportRow = Record<string, unknown>;
 
 const reports = [
   { id: 'stock', title: 'Stock Actual (Valorizado)', desc: 'Reporte completo del stock actual con valorización en soles', icon: Package, needsDates: false },
@@ -28,7 +30,7 @@ export default function Reportes() {
   const [desde, setDesde] = useState('2026-01-01');
   const [hasta, setHasta] = useState(new Date().toISOString().split('T')[0]);
 
-  const reportData = useMemo(() => {
+  const reportData = useMemo<ReportRow[]>(() => {
     if (!activeReport) return [];
     switch (activeReport) {
       case 'stock': return state.materiales.map(m => ({ Código: m.codigo, Descripción: m.descripcion, Categoría: m.categoria, Unidad: m.unidad, 'Stock Mín': m.stockMin, 'Stock Máx': m.stockMax, 'Stock Actual': m.stockActual, 'P. Unit. (S/)': fmtPEN(m.precioUnitario), 'Valor Stock (S/)': fmtPEN(m.stockActual * m.precioUnitario), Ubicación: m.ubicacion, Estado: m.estado }));
@@ -56,6 +58,50 @@ export default function Reportes() {
   const currentReport = reports.find(r => r.id === activeReport);
   const columns = reportData.length > 0 ? Object.keys(reportData[0]) : [];
 
+  const reportSummary = useMemo(() => {
+    switch (activeReport) {
+      case 'stock':
+      case 'criticos':
+      case 'stock-bajo':
+        return [
+          { label: 'Registros', value: reportData.length },
+          { label: 'Valor total stock (S/)', value: fmtPEN(stockTotal ?? 0) },
+        ];
+      case 'ingresos':
+      case 'salidas':
+      case 'kardex':
+      case 'historial':
+        return [
+          { label: 'Registros', value: reportData.length },
+          { label: 'Cantidad total', value: state.movimientos
+            .filter(m => {
+              if (m.fecha < desde || m.fecha > hasta) return false;
+              if (activeReport === 'ingresos') return m.tipo === 'ingreso';
+              if (activeReport === 'salidas') return m.tipo === 'salida';
+              return true;
+            })
+            .reduce((sum, item) => sum + item.cantidad, 0) },
+        ];
+      case 'consumos-zona':
+      case 'consumos-supervisor':
+      case 'consumos-labor':
+        return [
+          { label: 'Grupos', value: reportData.length },
+          { label: 'Cantidad total', value: reportData.reduce((sum, row) => sum + Number(row['Total Consumido'] ?? 0), 0) },
+        ];
+      default:
+        return [{ label: 'Registros', value: reportData.length }];
+    }
+  }, [activeReport, reportData, state.movimientos, desde, hasta, stockTotal]);
+
+  const detailSheetName = currentReport?.title ?? 'Reporte';
+  const filters = currentReport?.needsDates
+    ? [
+        { label: 'Desde', value: desde },
+        { label: 'Hasta', value: hasta },
+      ]
+    : [{ label: 'Corte', value: new Date().toISOString().split('T')[0] }];
+
   const handleExport = () => {
     const exportData = [...reportData];
     if (stockTotal !== null) {
@@ -65,9 +111,23 @@ export default function Reportes() {
         else if (c === 'Valor Stock (S/)') totalRow[c] = `S/ ${fmtPEN(stockTotal)}`;
         else totalRow[c] = '';
       });
-      exportData.push(totalRow as any);
+      exportData.push(totalRow);
     }
-    exportToExcel(exportData, currentReport?.title || 'Reporte', `reporte-${activeReport}`);
+    exportToExcel({
+      fileName: `reporte-${activeReport}`,
+      meta: {
+        title: currentReport?.title || 'Reporte',
+        generatedAt: fmtDateTime(),
+        filters,
+        summary: reportSummary,
+      },
+      sheets: [
+        {
+          name: detailSheetName,
+          data: exportData,
+        },
+      ],
+    });
   };
 
   return (
@@ -104,7 +164,7 @@ export default function Reportes() {
             <tbody>
               {reportData.slice(0, 100).map((row, i) => (
                 <tr key={i} className={`${i%2 ? 'bg-gray-50/50' : ''} border-b border-[#E2E6EF]`}>
-                  {columns.map(c => <td key={c} className="px-3 py-2 whitespace-nowrap">{String((row as any)[c] ?? '')}</td>)}
+                  {columns.map(c => <td key={c} className="px-3 py-2 whitespace-nowrap">{String(row[c] ?? '')}</td>)}
                 </tr>
               ))}
             </tbody>
