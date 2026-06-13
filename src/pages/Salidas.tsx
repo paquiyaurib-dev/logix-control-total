@@ -56,14 +56,14 @@ export default function Salidas() {
       .slice(0, 8);
   }, [materialSearch, state.materiales]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!selectedMaterial || !form.cantidad) {
       return;
     }
 
-    const ok = addSalida({
+    const ok = await addSalida({
       fecha: form.fecha,
       materialId: selectedMaterial.id,
       materialCodigo: selectedMaterial.codigo,
@@ -96,7 +96,7 @@ export default function Salidas() {
     setMaterialSearch('');
   };
 
-  const createCatalogItem = () => {
+  const createCatalogItem = async () => {
     const nombre = catalogName.trim();
     if (!nombre || !catalogModal) {
       return;
@@ -108,12 +108,12 @@ export default function Salidas() {
     };
 
     if (catalogModal === 'zona') {
-      saveZonasDestino([...state.zonasDestino, item]);
+      await saveZonasDestino([...state.zonasDestino, item]);
       setForm((current) => ({ ...current, zona: nombre }));
     }
 
     if (catalogModal === 'supervisor') {
-      saveSupervisores([...state.supervisores, item]);
+      await saveSupervisores([...state.supervisores, item]);
       setForm((current) => ({ ...current, supervisor: nombre }));
     }
 
@@ -142,7 +142,7 @@ export default function Salidas() {
     setEditingCatalogName(item.nombre);
   };
 
-  const saveCatalogEdit = () => {
+  const saveCatalogEdit = async () => {
     const nombre = editingCatalogName.trim();
     if (!catalogManager || !editingCatalogId || !nombre) {
       return;
@@ -150,7 +150,7 @@ export default function Salidas() {
 
     if (catalogManager === 'zona') {
       const previous = state.zonasDestino.find((item) => item.id === editingCatalogId)?.nombre;
-      saveZonasDestino(
+      await saveZonasDestino(
         state.zonasDestino.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -162,7 +162,7 @@ export default function Salidas() {
 
     if (catalogManager === 'supervisor') {
       const previous = state.supervisores.find((item) => item.id === editingCatalogId)?.nombre;
-      saveSupervisores(
+      await saveSupervisores(
         state.supervisores.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -176,16 +176,16 @@ export default function Salidas() {
     setEditingCatalogName('');
   };
 
-  const deleteCatalogItem = (item: CatalogItem) => {
+  const deleteCatalogItem = async (item: CatalogItem) => {
     if (catalogManager === 'zona') {
-      saveZonasDestino(state.zonasDestino.filter((current) => current.id !== item.id));
+      await saveZonasDestino(state.zonasDestino.filter((current) => current.id !== item.id));
       if (form.zona === item.nombre) {
         setForm((current) => ({ ...current, zona: '' }));
       }
     }
 
     if (catalogManager === 'supervisor') {
-      saveSupervisores(state.supervisores.filter((current) => current.id !== item.id));
+      await saveSupervisores(state.supervisores.filter((current) => current.id !== item.id));
       if (form.supervisor === item.nombre) {
         setForm((current) => ({ ...current, supervisor: '' }));
       }

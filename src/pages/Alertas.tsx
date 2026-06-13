@@ -81,8 +81,8 @@ export default function Alertas() {
             </div>
             {!a.resuelta && (
               <div className="flex gap-2 shrink-0">
-                {!a.leida && <Button size="sm" variant="ghost" onClick={() => markAlertaRead(a.id)}>Marcar leída</Button>}
-                <Button size="sm" variant="secondary" onClick={() => resolveAlerta(a.id)}>Resolver</Button>
+                {!a.leida && <Button size="sm" variant="ghost" onClick={() => void markAlertaRead(a.id)}>Marcar leída</Button>}
+                <Button size="sm" variant="secondary" onClick={() => void resolveAlerta(a.id)}>Resolver</Button>
               </div>
             )}
           </div>

@@ -53,7 +53,7 @@ export default function Configuracion() {
     setModalOpen(true);
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     const avatar = form.avatar || form.nombre.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
     const nextUser: StoredUser = {
       id: editingUserId ?? `user-${Date.now()}`,
@@ -67,13 +67,13 @@ export default function Configuracion() {
     const nextUsers = editingUserId
       ? authState.users.map((user) => (user.id === editingUserId ? nextUser : user))
       : [...authState.users, nextUser];
-    saveUsers(nextUsers);
+    await saveUsers(nextUsers);
     setModalOpen(false);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (authState.user?.id === userId) return;
-    saveUsers(authState.users.filter((user) => user.id !== userId));
+    await saveUsers(authState.users.filter((user) => user.id !== userId));
   };
 
   const handleExportUsers = () => {

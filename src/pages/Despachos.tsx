@@ -58,13 +58,13 @@ export default function Despachos() {
     return state.despachos.filter((despacho) => !laborFilter || despacho.labor === laborFilter);
   }, [state.despachos, laborFilter]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMaterial || !form.cantidad) {
       return;
     }
 
-    addDespacho({
+    await addDespacho({
       materialId: selectedMaterial.id,
       materialCodigo: selectedMaterial.codigo,
       materialDescripcion: selectedMaterial.descripcion,
@@ -89,7 +89,7 @@ export default function Despachos() {
     setMaterialSearch('');
   };
 
-  const createCatalogItem = () => {
+  const createCatalogItem = async () => {
     const nombre = catalogName.trim();
     if (!nombre || !catalogModal) {
       return;
@@ -101,17 +101,17 @@ export default function Despachos() {
     };
 
     if (catalogModal === 'labor') {
-      saveLaboresActividad([...state.laboresActividad, item]);
+      await saveLaboresActividad([...state.laboresActividad, item]);
       setForm((current) => ({ ...current, labor: nombre }));
     }
 
     if (catalogModal === 'supervisor') {
-      saveSupervisores([...state.supervisores, item]);
+      await saveSupervisores([...state.supervisores, item]);
       setForm((current) => ({ ...current, supervisor: nombre }));
     }
 
     if (catalogModal === 'bodega') {
-      saveBodegas([...state.bodegas, item]);
+      await saveBodegas([...state.bodegas, item]);
       setForm((current) => ({ ...current, bodegaOrigen: nombre }));
     }
 
@@ -143,7 +143,7 @@ export default function Despachos() {
     setEditingCatalogName(item.nombre);
   };
 
-  const saveCatalogEdit = () => {
+  const saveCatalogEdit = async () => {
     const nombre = editingCatalogName.trim();
     if (!catalogManager || !editingCatalogId || !nombre) {
       return;
@@ -151,7 +151,7 @@ export default function Despachos() {
 
     if (catalogManager === 'labor') {
       const previous = state.laboresActividad.find((item) => item.id === editingCatalogId)?.nombre;
-      saveLaboresActividad(
+      await saveLaboresActividad(
         state.laboresActividad.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -163,7 +163,7 @@ export default function Despachos() {
 
     if (catalogManager === 'supervisor') {
       const previous = state.supervisores.find((item) => item.id === editingCatalogId)?.nombre;
-      saveSupervisores(
+      await saveSupervisores(
         state.supervisores.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -175,7 +175,7 @@ export default function Despachos() {
 
     if (catalogManager === 'bodega') {
       const previous = state.bodegas.find((item) => item.id === editingCatalogId)?.nombre;
-      saveBodegas(
+      await saveBodegas(
         state.bodegas.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -189,23 +189,23 @@ export default function Despachos() {
     setEditingCatalogName('');
   };
 
-  const deleteCatalogItem = (item: CatalogItem) => {
+  const deleteCatalogItem = async (item: CatalogItem) => {
     if (catalogManager === 'labor') {
-      saveLaboresActividad(state.laboresActividad.filter((current) => current.id !== item.id));
+      await saveLaboresActividad(state.laboresActividad.filter((current) => current.id !== item.id));
       if (form.labor === item.nombre) {
         setForm((current) => ({ ...current, labor: '' }));
       }
     }
 
     if (catalogManager === 'supervisor') {
-      saveSupervisores(state.supervisores.filter((current) => current.id !== item.id));
+      await saveSupervisores(state.supervisores.filter((current) => current.id !== item.id));
       if (form.supervisor === item.nombre) {
         setForm((current) => ({ ...current, supervisor: '' }));
       }
     }
 
     if (catalogManager === 'bodega') {
-      saveBodegas(state.bodegas.filter((current) => current.id !== item.id));
+      await saveBodegas(state.bodegas.filter((current) => current.id !== item.id));
       if (form.bodegaOrigen === item.nombre) {
         setForm((current) => ({ ...current, bodegaOrigen: '' }));
       }

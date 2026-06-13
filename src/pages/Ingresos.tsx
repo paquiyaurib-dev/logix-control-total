@@ -63,13 +63,13 @@ export default function Ingresos() {
     (material) => material.id === Number(form.materialId)
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMaterial || !form.cantidad) {
       return;
     }
 
-    addIngreso({
+    await addIngreso({
       fecha: form.fecha,
       materialId: selectedMaterial.id,
       materialCodigo: selectedMaterial.codigo,
@@ -100,7 +100,7 @@ export default function Ingresos() {
     setMaterialSearch('');
   };
 
-  const createCatalogItem = () => {
+  const createCatalogItem = async () => {
     if (catalogModal === 'proveedor') {
       const razonSocial = catalogName.trim();
       if (!razonSocial) {
@@ -114,7 +114,7 @@ export default function Ingresos() {
         telefono: '',
         email: '',
       };
-      saveProveedores([...state.proveedores, proveedor]);
+      await saveProveedores([...state.proveedores, proveedor]);
       setForm((current) => ({ ...current, proveedorId: String(proveedor.id) }));
     }
 
@@ -129,7 +129,7 @@ export default function Ingresos() {
         value: code,
         label: `${code}-${label}`,
       };
-      saveClasesMovimiento([...state.clasesMovimiento, clase]);
+      await saveClasesMovimiento([...state.clasesMovimiento, clase]);
       setForm((current) => ({ ...current, clase: clase.value }));
     }
 
@@ -157,7 +157,7 @@ export default function Ingresos() {
     }
   };
 
-  const saveCatalogEdit = () => {
+  const saveCatalogEdit = async () => {
     if (!catalogManager || editingCatalogId === null) {
       return;
     }
@@ -167,7 +167,7 @@ export default function Ingresos() {
       if (!razonSocial) {
         return;
       }
-      saveProveedores(
+      await saveProveedores(
         state.proveedores.map((item) =>
           item.id === editingCatalogId ? { ...item, razonSocial } : item
         )
@@ -180,7 +180,7 @@ export default function Ingresos() {
       if (!code || !label) {
         return;
       }
-      saveClasesMovimiento(
+      await saveClasesMovimiento(
         state.clasesMovimiento.map((item) =>
           item.id === editingCatalogId
             ? { ...item, value: code, label: `${code}-${label}` }
@@ -197,9 +197,9 @@ export default function Ingresos() {
     setEditingCatalogCode('');
   };
 
-  const deleteCatalogItem = (id: string | number) => {
+  const deleteCatalogItem = async (id: string | number) => {
     if (catalogManager === 'proveedor') {
-      saveProveedores(state.proveedores.filter((item) => item.id !== id));
+      await saveProveedores(state.proveedores.filter((item) => item.id !== id));
       if (form.proveedorId === String(id)) {
         setForm((current) => ({ ...current, proveedorId: '' }));
       }
@@ -207,7 +207,7 @@ export default function Ingresos() {
 
     if (catalogManager === 'clase') {
       const currentValue = state.clasesMovimiento.find((item) => item.id === id)?.value;
-      saveClasesMovimiento(state.clasesMovimiento.filter((item) => item.id !== id));
+      await saveClasesMovimiento(state.clasesMovimiento.filter((item) => item.id !== id));
       if (form.clase === currentValue) {
         setForm((current) => ({ ...current, clase: '' }));
       }

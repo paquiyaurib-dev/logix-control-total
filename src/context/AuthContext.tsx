@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
+import { getUsuarios, replaceUsuarios } from '../lib/database';
 
 export type UserRole = 'Administrador' | 'Supervisor' | 'Bodeguero' | 'Consulta';
 
@@ -84,9 +85,9 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 
 interface AuthContextType {
   state: AuthState;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
-  saveUsers: (users: StoredUser[]) => void;
+  saveUsers: (users: StoredUser[]) => Promise<void>;
   importUsersFromFile: (file: File) => Promise<{ ok: boolean; message: string }>;
 }
 
@@ -94,6 +95,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [fallbackLoaded, setFallbackLoaded] = useState(false);
+  const [remoteLoaded, setRemoteLoaded] = useState(false);
   const [state, dispatch] = useReducer(authReducer, initialState, (baseState) => {
     if (typeof window === 'undefined') return baseState;
     try {
@@ -126,6 +128,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       channel.close();
     }
   }, [state]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || remoteLoaded) return;
+
+    const loadRemoteUsers = async () => {
+      try {
+        const users = normalizeUsers(await getUsuarios());
+        if (users.length > 0) {
+          dispatch({ type: 'SET_USERS', payload: users });
+        }
+      } catch {
+        return;
+      } finally {
+        setRemoteLoaded(true);
+      }
+    };
+
+    void loadRemoteUsers();
+  }, [remoteLoaded]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || fallbackLoaded) return;
@@ -192,8 +213,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = (username: string, password: string): boolean => {
-    const entry = state.users.find((user) => user.username === username && user.password === password);
+  const login = async (username: string, password: string): Promise<boolean> => {
+    let users = state.users;
+    try {
+      const remoteUsers = normalizeUsers(await getUsuarios());
+      if (remoteUsers.length > 0) {
+        users = remoteUsers;
+        dispatch({ type: 'SET_USERS', payload: remoteUsers });
+      }
+    } catch {
+      users = state.users;
+    }
+    const entry = users.find((user) => user.username === username && user.password === password);
     if (!entry) return false;
     const { password: _password, ...user } = entry;
     dispatch({ type: 'LOGIN', payload: user });
@@ -201,7 +232,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => dispatch({ type: 'LOGOUT' });
-  const saveUsers = (users: StoredUser[]) => dispatch({ type: 'SET_USERS', payload: users });
+  const saveUsers = async (users: StoredUser[]) => {
+    dispatch({ type: 'SET_USERS', payload: users });
+    try {
+      await replaceUsuarios(normalizeUsers(users));
+    } catch {
+      return;
+    }
+  };
   const importUsersFromFile = async (file: File) => {
     try {
       const raw = await file.text();
@@ -211,6 +249,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const users = normalizeUsers(parsed);
       dispatch({ type: 'SET_USERS', payload: users });
+      try {
+        await replaceUsuarios(users);
+      } catch {
+        return { ok: true, message: `${users.length} usuarios importados localmente. No se pudo sincronizar con Supabase.` };
+      }
       return { ok: true, message: `${users.length} usuarios importados correctamente.` };
     } catch {
       return { ok: false, message: 'No se pudo importar el archivo JSON de usuarios.' };

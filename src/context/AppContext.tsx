@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import {
   Material,
   Movimiento,
@@ -17,6 +17,18 @@ import {
   despachos as mockDespachos,
   proveedores as mockProveedores,
 } from '../data/mockData';
+import {
+  addDespacho as addDespachoRemote,
+  addMovimiento as addMovimientoRemote,
+  addTareo as addTareoRemote,
+  appendAuditEntry,
+  loadAppData,
+  replaceCatalog,
+  replaceProveedores,
+  upsertActivo,
+  upsertAlerta,
+  upsertMaterial,
+} from '../lib/database';
 
 export interface CatalogItem {
   id: string;
@@ -340,29 +352,30 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
 interface AppContextType {
   state: AppState;
-  addIngreso: (mov: Partial<Movimiento>) => void;
-  addSalida: (mov: Partial<Movimiento>) => boolean;
-  addDespacho: (d: Partial<DespachoRecord>) => void;
-  addMaterial: (m: Omit<MaterialWithWarehouseInventory, 'id' | 'inventarioPorBodega'>) => void;
-  updateMaterial: (m: MaterialWithWarehouseInventory) => void;
-  addActivo: (a: Omit<Activo, 'id'>) => void;
-  updateActivo: (a: Activo) => void;
-  addTareo: (t: Omit<Tareo, 'id'>) => void;
-  markAlertaRead: (id: number) => void;
-  resolveAlerta: (id: number) => void;
-  saveProveedores: (proveedores: Proveedor[]) => void;
-  saveCategorias: (categorias: CatalogItem[]) => void;
-  saveUnidades: (unidades: CatalogItem[]) => void;
-  saveBodegas: (bodegas: CatalogItem[]) => void;
-  saveZonasDestino: (zonasDestino: CatalogItem[]) => void;
-  saveClasesMovimiento: (clasesMovimiento: MovementClassItem[]) => void;
-  saveLaboresActividad: (laboresActividad: CatalogItem[]) => void;
-  saveSupervisores: (supervisores: CatalogItem[]) => void;
+  addIngreso: (mov: Partial<Movimiento>) => Promise<void>;
+  addSalida: (mov: Partial<Movimiento>) => Promise<boolean>;
+  addDespacho: (d: Partial<DespachoRecord>) => Promise<void>;
+  addMaterial: (m: Omit<MaterialWithWarehouseInventory, 'id' | 'inventarioPorBodega'>) => Promise<void>;
+  updateMaterial: (m: MaterialWithWarehouseInventory) => Promise<void>;
+  addActivo: (a: Omit<Activo, 'id'>) => Promise<void>;
+  updateActivo: (a: Activo) => Promise<void>;
+  addTareo: (t: Omit<Tareo, 'id'>) => Promise<void>;
+  markAlertaRead: (id: number) => Promise<void>;
+  resolveAlerta: (id: number) => Promise<void>;
+  saveProveedores: (proveedores: Proveedor[]) => Promise<void>;
+  saveCategorias: (categorias: CatalogItem[]) => Promise<void>;
+  saveUnidades: (unidades: CatalogItem[]) => Promise<void>;
+  saveBodegas: (bodegas: CatalogItem[]) => Promise<void>;
+  saveZonasDestino: (zonasDestino: CatalogItem[]) => Promise<void>;
+  saveClasesMovimiento: (clasesMovimiento: MovementClassItem[]) => Promise<void>;
+  saveLaboresActividad: (laboresActividad: CatalogItem[]) => Promise<void>;
+  saveSupervisores: (supervisores: CatalogItem[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const remoteLoadedRef = useRef(false);
   const [state, dispatch] = useReducer(
     appReducer,
     initialState,
@@ -411,6 +424,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || remoteLoadedRef.current) {
+      return;
+    }
+
+    const hydrateFromSupabase = async () => {
+      try {
+        const remoteState = await loadAppData(initialState);
+        dispatch({ type: 'HYDRATE', payload: remoteState });
+      } catch {
+        return;
+      } finally {
+        remoteLoadedRef.current = true;
+      }
+    };
+
+    void hydrateFromSupabase();
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -440,7 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const addIngreso = (mov: Partial<Movimiento>) => {
+  const addIngreso = async (mov: Partial<Movimiento>) => {
     const newMov: Movimiento = {
       id: Date.now(),
       tipo: 'ingreso',
@@ -457,19 +489,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...mov,
     };
     dispatch({ type: 'ADD_MOVIMIENTO', payload: newMov });
-    dispatch({
-      type: 'ADD_AUDIT_LOG',
-      payload: {
-        id: `a-${Date.now()}`,
-        accion: 'INGRESO',
-        detalle: `Ingreso ${newMov.cantidad} uds de ${newMov.materialCodigo}`,
-        usuario: newMov.usuario,
-        fecha: newMov.fecha,
-      },
-    });
+    const auditEntry = {
+      id: `a-${Date.now()}`,
+      accion: 'INGRESO',
+      detalle: `Ingreso ${newMov.cantidad} uds de ${newMov.materialCodigo}`,
+      usuario: newMov.usuario,
+      fecha: newMov.fecha,
+    };
+    dispatch({ type: 'ADD_AUDIT_LOG', payload: auditEntry });
+    try {
+      await addMovimientoRemote(newMov);
+      await appendAuditEntry(auditEntry);
+    } catch {
+      return;
+    }
   };
 
-  const addSalida = (mov: Partial<Movimiento>): boolean => {
+  const addSalida = async (mov: Partial<Movimiento>): Promise<boolean> => {
     const material = state.materiales.find((item) => item.id === mov.materialId);
     if (!material || material.stockActual < (mov.cantidad || 0)) {
       return false;
@@ -490,20 +526,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...mov,
     };
     dispatch({ type: 'ADD_MOVIMIENTO', payload: newMov });
-    dispatch({
-      type: 'ADD_AUDIT_LOG',
-      payload: {
-        id: `a-${Date.now()}`,
-        accion: 'SALIDA',
-        detalle: `Salida ${newMov.cantidad} uds de ${newMov.materialCodigo}`,
-        usuario: newMov.usuario,
-        fecha: newMov.fecha,
-      },
-    });
+    const auditEntry = {
+      id: `a-${Date.now()}`,
+      accion: 'SALIDA',
+      detalle: `Salida ${newMov.cantidad} uds de ${newMov.materialCodigo}`,
+      usuario: newMov.usuario,
+      fecha: newMov.fecha,
+    };
+    dispatch({ type: 'ADD_AUDIT_LOG', payload: auditEntry });
+    try {
+      await addMovimientoRemote(newMov);
+      await appendAuditEntry(auditEntry);
+    } catch {
+      return true;
+    }
     return true;
   };
 
-  const addDespacho = (d: Partial<DespachoRecord>) => {
+  const addDespacho = async (d: Partial<DespachoRecord>) => {
     const newDespacho: DespachoRecord = {
       id: Date.now(),
       materialId: 0,
@@ -517,61 +557,163 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...d,
     };
     dispatch({ type: 'ADD_DESPACHO', payload: newDespacho });
+    try {
+      await addDespachoRemote(newDespacho);
+    } catch {
+      return;
+    }
   };
 
-  const addMaterial = (material: Omit<MaterialWithWarehouseInventory, 'id' | 'inventarioPorBodega'>) => {
+  const addMaterial = async (material: Omit<MaterialWithWarehouseInventory, 'id' | 'inventarioPorBodega'>) => {
+    const payload = normalizeMaterial({ ...material, id: Date.now() } as Material, state.bodegas);
     dispatch({
       type: 'ADD_MATERIAL',
-      payload: normalizeMaterial({ ...material, id: Date.now() } as Material, state.bodegas),
+      payload,
     });
+    try {
+      await upsertMaterial(payload);
+    } catch {
+      return;
+    }
   };
 
-  const updateMaterial = (material: MaterialWithWarehouseInventory) => {
-    dispatch({ type: 'UPDATE_MATERIAL', payload: normalizeMaterial(material, state.bodegas) });
+  const updateMaterial = async (material: MaterialWithWarehouseInventory) => {
+    const payload = normalizeMaterial(material, state.bodegas);
+    dispatch({ type: 'UPDATE_MATERIAL', payload });
+    try {
+      await upsertMaterial(payload);
+    } catch {
+      return;
+    }
   };
 
-  const addActivo = (activo: Omit<Activo, 'id'>) => {
-    dispatch({ type: 'ADD_ACTIVO', payload: { ...activo, id: Date.now() } as Activo });
+  const addActivo = async (activo: Omit<Activo, 'id'>) => {
+    const payload = { ...activo, id: Date.now() } as Activo;
+    dispatch({ type: 'ADD_ACTIVO', payload });
+    try {
+      await upsertActivo(payload);
+    } catch {
+      return;
+    }
   };
 
-  const updateActivo = (activo: Activo) => dispatch({ type: 'UPDATE_ACTIVO', payload: activo });
-
-  const addTareo = (tareo: Omit<Tareo, 'id'>) => {
-    dispatch({ type: 'ADD_TAREO', payload: { ...tareo, id: Date.now() } as Tareo });
+  const updateActivo = async (activo: Activo) => {
+    dispatch({ type: 'UPDATE_ACTIVO', payload: activo });
+    try {
+      await upsertActivo(activo);
+    } catch {
+      return;
+    }
   };
 
-  const markAlertaRead = (id: number) => dispatch({ type: 'MARK_ALERTA_READ', payload: id });
+  const addTareo = async (tareo: Omit<Tareo, 'id'>) => {
+    const payload = { ...tareo, id: Date.now() } as Tareo;
+    dispatch({ type: 'ADD_TAREO', payload });
+    try {
+      await addTareoRemote(payload);
+    } catch {
+      return;
+    }
+  };
 
-  const resolveAlerta = (id: number) => {
+  const markAlertaRead = async (id: number) => {
+    dispatch({ type: 'MARK_ALERTA_READ', payload: id });
+    const alerta = state.alertas.find((item) => item.id === id);
+    if (!alerta) {
+      return;
+    }
+    try {
+      await upsertAlerta({ ...alerta, leida: true });
+    } catch {
+      return;
+    }
+  };
+
+  const resolveAlerta = async (id: number) => {
     dispatch({ type: 'RESOLVE_ALERTA', payload: id });
-    dispatch({
-      type: 'ADD_AUDIT_LOG',
-      payload: {
-        id: `a-${Date.now()}`,
-        accion: 'RESOLVER_ALERTA',
-        detalle: `Alerta ${id} resuelta`,
-        usuario: 'Sistema',
-        fecha: new Date().toISOString(),
-      },
-    });
+    const alerta = state.alertas.find((item) => item.id === id);
+    const auditEntry = {
+      id: `a-${Date.now()}`,
+      accion: 'RESOLVER_ALERTA',
+      detalle: `Alerta ${id} resuelta`,
+      usuario: 'Sistema',
+      fecha: new Date().toISOString(),
+    };
+    dispatch({ type: 'ADD_AUDIT_LOG', payload: auditEntry });
+    try {
+      if (alerta) {
+        await upsertAlerta({ ...alerta, resuelta: true, leida: true });
+      }
+      await appendAuditEntry(auditEntry);
+    } catch {
+      return;
+    }
   };
 
-  const saveProveedores = (proveedores: Proveedor[]) =>
+  const saveProveedores = async (proveedores: Proveedor[]) => {
     dispatch({ type: 'SET_PROVEEDORES', payload: proveedores });
-  const saveCategorias = (categorias: CatalogItem[]) =>
+    try {
+      await replaceProveedores(proveedores);
+    } catch {
+      return;
+    }
+  };
+  const saveCategorias = async (categorias: CatalogItem[]) => {
     dispatch({ type: 'SET_CATEGORIAS', payload: categorias });
-  const saveUnidades = (unidades: CatalogItem[]) =>
+    try {
+      await replaceCatalog('categoria', categorias);
+    } catch {
+      return;
+    }
+  };
+  const saveUnidades = async (unidades: CatalogItem[]) => {
     dispatch({ type: 'SET_UNIDADES', payload: unidades });
-  const saveBodegas = (bodegas: CatalogItem[]) =>
+    try {
+      await replaceCatalog('unidad', unidades);
+    } catch {
+      return;
+    }
+  };
+  const saveBodegas = async (bodegas: CatalogItem[]) => {
     dispatch({ type: 'SET_BODEGAS', payload: bodegas });
-  const saveZonasDestino = (zonasDestino: CatalogItem[]) =>
+    try {
+      await replaceCatalog('bodega', bodegas);
+    } catch {
+      return;
+    }
+  };
+  const saveZonasDestino = async (zonasDestino: CatalogItem[]) => {
     dispatch({ type: 'SET_ZONAS_DESTINO', payload: zonasDestino });
-  const saveClasesMovimiento = (clasesMovimiento: MovementClassItem[]) =>
+    try {
+      await replaceCatalog('zona', zonasDestino);
+    } catch {
+      return;
+    }
+  };
+  const saveClasesMovimiento = async (clasesMovimiento: MovementClassItem[]) => {
     dispatch({ type: 'SET_CLASES_MOVIMIENTO', payload: clasesMovimiento });
-  const saveLaboresActividad = (laboresActividad: CatalogItem[]) =>
+    try {
+      await replaceCatalog('clase', clasesMovimiento);
+    } catch {
+      return;
+    }
+  };
+  const saveLaboresActividad = async (laboresActividad: CatalogItem[]) => {
     dispatch({ type: 'SET_LABORES_ACTIVIDAD', payload: laboresActividad });
-  const saveSupervisores = (supervisores: CatalogItem[]) =>
+    try {
+      await replaceCatalog('labor', laboresActividad);
+    } catch {
+      return;
+    }
+  };
+  const saveSupervisores = async (supervisores: CatalogItem[]) => {
     dispatch({ type: 'SET_SUPERVISORES', payload: supervisores });
+    try {
+      await replaceCatalog('supervisor', supervisores);
+    } catch {
+      return;
+    }
+  };
 
   const value = useMemo(
     () => ({

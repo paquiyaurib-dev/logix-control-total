@@ -123,12 +123,12 @@ export default function Materiales() {
     setModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.categoria || !form.unidad) {
       return;
     }
     if (editing) {
-      updateMaterial({
+      await updateMaterial({
         ...(editing as any),
         ...form,
         id: editing.id,
@@ -136,7 +136,7 @@ export default function Materiales() {
         unidad: form.unidad as Material['unidad'],
       });
     } else {
-      addMaterial({
+      await addMaterial({
         ...form,
         categoria: form.categoria as Material['categoria'],
         unidad: form.unidad as Material['unidad'],
@@ -150,7 +150,7 @@ export default function Materiales() {
     setCatalogName('');
   };
 
-  const createCatalogItem = () => {
+  const createCatalogItem = async () => {
     const nombre = catalogName.trim();
     if (!nombre || !catalogModal) {
       return;
@@ -162,12 +162,12 @@ export default function Materiales() {
     };
 
     if (catalogModal === 'categoria') {
-      saveCategorias([...state.categorias, newItem]);
+      await saveCategorias([...state.categorias, newItem]);
       setForm((current) => ({ ...current, categoria: nombre }));
     }
 
     if (catalogModal === 'unidad') {
-      saveUnidades([...state.unidades, newItem]);
+      await saveUnidades([...state.unidades, newItem]);
       setForm((current) => ({ ...current, unidad: nombre }));
     }
 
@@ -196,14 +196,14 @@ export default function Materiales() {
     setEditingCatalogName(item.nombre);
   };
 
-  const saveCatalogEdit = () => {
+  const saveCatalogEdit = async () => {
     const nombre = editingCatalogName.trim();
     if (!catalogManager || !editingCatalogId || !nombre) {
       return;
     }
 
     if (catalogManager === 'categoria') {
-      saveCategorias(
+      await saveCategorias(
         state.categorias.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -214,7 +214,7 @@ export default function Materiales() {
     }
 
     if (catalogManager === 'unidad') {
-      saveUnidades(
+      await saveUnidades(
         state.unidades.map((item) =>
           item.id === editingCatalogId ? { ...item, nombre } : item
         )
@@ -228,16 +228,16 @@ export default function Materiales() {
     setEditingCatalogName('');
   };
 
-  const deleteCatalogItem = (item: CatalogItem) => {
+  const deleteCatalogItem = async (item: CatalogItem) => {
     if (catalogManager === 'categoria') {
-      saveCategorias(state.categorias.filter((current) => current.id !== item.id));
+      await saveCategorias(state.categorias.filter((current) => current.id !== item.id));
       if (form.categoria === item.nombre) {
         setForm((current) => ({ ...current, categoria: '' }));
       }
     }
 
     if (catalogManager === 'unidad') {
-      saveUnidades(state.unidades.filter((current) => current.id !== item.id));
+      await saveUnidades(state.unidades.filter((current) => current.id !== item.id));
       if (form.unidad === item.nombre) {
         setForm((current) => ({ ...current, unidad: '' }));
       }

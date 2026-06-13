@@ -19,12 +19,12 @@ export default function Flota() {
 
   const maintenanceVehicles = state.vehiculos.filter(v => v.estado !== 'Operativo');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.vehiculoId) return;
     const v = state.vehiculos.find(x => x.id === Number(form.vehiculoId));
     if (!v) return;
-    addTareo({ vehiculoId: v.id, placa: v.placa, fecha: form.fecha, operador: form.operador || v.operador, supervisor: form.supervisor, kmInicial: form.kmInicial, kmFinal: form.kmFinal, horometroInicial: form.horometroInicial, horometroFinal: form.horometroFinal, combustible: form.combustible, actividad: form.actividad, observaciones: form.observaciones });
+    await addTareo({ vehiculoId: v.id, placa: v.placa, fecha: form.fecha, operador: form.operador || v.operador, supervisor: form.supervisor, kmInicial: form.kmInicial, kmFinal: form.kmFinal, horometroInicial: form.horometroInicial, horometroFinal: form.horometroFinal, combustible: form.combustible, actividad: form.actividad, observaciones: form.observaciones });
     setSuccess(true); setTimeout(() => setSuccess(false), 3000);
     setForm({ ...form, vehiculoId: '', kmInicial: 0, kmFinal: 0, horometroInicial: 0, horometroFinal: 0, combustible: 0, actividad: '', observaciones: '' });
   };

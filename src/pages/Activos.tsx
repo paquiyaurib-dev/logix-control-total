@@ -32,8 +32,8 @@ export default function Activos() {
 
   const openNew = () => { setSelected(null); setForm({ codigoPatrimonial: '', serie: '', marca: '', modelo: '', categoria: 'Equipos', ubicacion: '', responsable: '', estado: 'Operativo', fechaAsignacion: new Date().toISOString().split('T')[0], historialTransferencias: [] }); setModalOpen(true); };
   const openEdit = (a: Activo) => { setSelected(a); setForm({ ...a }); setModalOpen(true); };
-  const handleSave = () => {
-    if (selected) updateActivo({ ...form, id: selected.id }); else addActivo(form);
+  const handleSave = async () => {
+    if (selected) await updateActivo({ ...form, id: selected.id }); else await addActivo(form);
     setModalOpen(false);
   };
 
