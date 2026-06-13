@@ -73,6 +73,7 @@ export interface AppState {
   zonasDestino: CatalogItem[];
   laboresActividad: CatalogItem[];
   supervisores: CatalogItem[];
+  equipos: CatalogItem[];
   clasesMovimiento: MovementClassItem[];
   auditLog: AuditEntry[];
   lastUpdatedAt: number;
@@ -98,6 +99,7 @@ type AppAction =
   | { type: 'SET_CLASES_MOVIMIENTO'; payload: MovementClassItem[] }
   | { type: 'SET_LABORES_ACTIVIDAD'; payload: CatalogItem[] }
   | { type: 'SET_SUPERVISORES'; payload: CatalogItem[] }
+  | { type: 'SET_EQUIPOS'; payload: CatalogItem[] }
   | { type: 'HYDRATE'; payload: AppState };
 
 const CHANNEL_NAME = 'logix-sync';
@@ -219,6 +221,7 @@ const initialState: AppState = {
   zonasDestino: defaultZonasDestino,
   laboresActividad: defaultLaboresActividad,
   supervisores: defaultSupervisores,
+  equipos: [],
   clasesMovimiento: defaultClasesMovimiento,
   auditLog: [],
   lastUpdatedAt: Date.now(),
@@ -354,6 +357,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return stamp({ ...state, laboresActividad: action.payload });
     case 'SET_SUPERVISORES':
       return stamp({ ...state, supervisores: action.payload });
+    case 'SET_EQUIPOS':
+      return stamp({ ...state, equipos: action.payload });
     default:
       return state;
   }
@@ -379,6 +384,7 @@ interface AppContextType {
   saveClasesMovimiento: (clasesMovimiento: MovementClassItem[]) => Promise<void>;
   saveLaboresActividad: (laboresActividad: CatalogItem[]) => Promise<void>;
   saveSupervisores: (supervisores: CatalogItem[]) => Promise<void>;
+  saveEquipos: (equipos: CatalogItem[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -410,6 +416,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           zonasDestino: parsed.zonasDestino ?? baseState.zonasDestino,
           laboresActividad: parsed.laboresActividad ?? baseState.laboresActividad,
           supervisores: parsed.supervisores ?? baseState.supervisores,
+          equipos: parsed.equipos ?? baseState.equipos,
           clasesMovimiento: parsed.clasesMovimiento ?? baseState.clasesMovimiento,
           auditLog: parsed.auditLog ?? baseState.auditLog,
           lastUpdatedAt: parsed.lastUpdatedAt ?? baseState.lastUpdatedAt,
@@ -723,6 +730,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
   };
+  const saveEquipos = async (equipos: CatalogItem[]) => {
+    dispatch({ type: 'SET_EQUIPOS', payload: equipos });
+    try {
+      await replaceCatalog('equipo', equipos);
+    } catch {
+      return;
+    }
+  };
 
   const value = useMemo(
     () => ({
@@ -745,6 +760,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveClasesMovimiento,
       saveLaboresActividad,
       saveSupervisores,
+      saveEquipos,
     }),
     [state]
   );

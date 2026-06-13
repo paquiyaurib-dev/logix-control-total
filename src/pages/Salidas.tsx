@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
-type CatalogModalType = 'zona' | 'supervisor' | null;
-type CatalogManagerType = 'zona' | 'supervisor' | null;
+type CatalogModalType = 'zona' | 'supervisor' | 'categoria' | 'equipo' | null;
+type CatalogManagerType = 'zona' | 'supervisor' | 'categoria' | 'equipo' | null;
 
 export default function Salidas() {
   const {
@@ -15,6 +15,8 @@ export default function Salidas() {
     addSalida,
     saveZonasDestino,
     saveSupervisores,
+    saveCategorias,
+    saveEquipos,
   } = useApp();
   const { state: authState } = useAuth();
 
@@ -32,6 +34,8 @@ export default function Salidas() {
     materialId: '',
     cantidad: 0,
     vale: '',
+    categoria: '',
+    equipo: '',
     zona: '',
     bodeguero: authState.user?.nombre || '',
     supervisor: '',
@@ -73,7 +77,7 @@ export default function Salidas() {
       zona: form.zona,
       bodeguero: form.bodeguero,
       supervisor: form.supervisor,
-      observaciones: form.observaciones,
+      observaciones: `Cat: ${form.categoria} | Equipo: ${form.equipo} | ${form.observaciones}`,
       usuario: authState.user?.nombre || 'Sistema',
     });
 
@@ -89,6 +93,8 @@ export default function Salidas() {
       materialId: '',
       cantidad: 0,
       vale: '',
+      categoria: '',
+      equipo: '',
       zona: '',
       supervisor: '',
       observaciones: '',
@@ -117,6 +123,16 @@ export default function Salidas() {
       setForm((current) => ({ ...current, supervisor: nombre }));
     }
 
+    if (catalogModal === 'categoria') {
+      await saveCategorias([...state.categorias, item]);
+      setForm((current) => ({ ...current, categoria: nombre }));
+    }
+
+    if (catalogModal === 'equipo') {
+      await saveEquipos([...state.equipos, item]);
+      setForm((current) => ({ ...current, equipo: nombre }));
+    }
+
     setCatalogModal(null);
     setCatalogName('');
   };
@@ -134,7 +150,29 @@ export default function Salidas() {
     if (catalogManager === 'supervisor') {
       return state.supervisores;
     }
+    if (catalogManager === 'categoria') {
+      return state.categorias;
+    }
+    if (catalogManager === 'equipo') {
+      return state.equipos;
+    }
     return [];
+  };
+
+  const getCatalogTitle = () => {
+    if (catalogManager === 'zona') return 'Gestionar zonas destino';
+    if (catalogManager === 'supervisor') return 'Gestionar supervisores';
+    if (catalogManager === 'categoria') return 'Gestionar categorías';
+    if (catalogManager === 'equipo') return 'Gestionar equipos';
+    return '';
+  };
+
+  const getModalTitle = () => {
+    if (catalogModal === 'zona') return 'Nueva zona destino';
+    if (catalogModal === 'supervisor') return 'Nuevo supervisor';
+    if (catalogModal === 'categoria') return 'Nueva categoría';
+    if (catalogModal === 'equipo') return 'Nuevo equipo';
+    return '';
   };
 
   const startCatalogEdit = (item: CatalogItem) => {
@@ -172,6 +210,30 @@ export default function Salidas() {
       }
     }
 
+    if (catalogManager === 'categoria') {
+      const previous = state.categorias.find((item) => item.id === editingCatalogId)?.nombre;
+      await saveCategorias(
+        state.categorias.map((item) =>
+          item.id === editingCatalogId ? { ...item, nombre } : item
+        )
+      );
+      if (form.categoria === previous) {
+        setForm((current) => ({ ...current, categoria: nombre }));
+      }
+    }
+
+    if (catalogManager === 'equipo') {
+      const previous = state.equipos.find((item) => item.id === editingCatalogId)?.nombre;
+      await saveEquipos(
+        state.equipos.map((item) =>
+          item.id === editingCatalogId ? { ...item, nombre } : item
+        )
+      );
+      if (form.equipo === previous) {
+        setForm((current) => ({ ...current, equipo: nombre }));
+      }
+    }
+
     setEditingCatalogId(null);
     setEditingCatalogName('');
   };
@@ -190,6 +252,29 @@ export default function Salidas() {
         setForm((current) => ({ ...current, supervisor: '' }));
       }
     }
+
+    if (catalogManager === 'categoria') {
+      await saveCategorias(state.categorias.filter((current) => current.id !== item.id));
+      if (form.categoria === item.nombre) {
+        setForm((current) => ({ ...current, categoria: '' }));
+      }
+    }
+
+    if (catalogManager === 'equipo') {
+      await saveEquipos(state.equipos.filter((current) => current.id !== item.id));
+      if (form.equipo === item.nombre) {
+        setForm((current) => ({ ...current, equipo: '' }));
+      }
+    }
+  };
+
+  // Extract categoria and equipo from observaciones for display
+  const parseObservaciones = (obs: string) => {
+    const catMatch = obs.match(/Cat: ([^|]*)/);
+    const eqMatch = obs.match(/Equipo: ([^|]*)/);
+    const cat = catMatch ? catMatch[1].trim() : '';
+    const eq = eqMatch ? eqMatch[1].trim() : '';
+    return { categoria: cat, equipo: eq };
   };
 
   return (
@@ -276,6 +361,68 @@ export default function Salidas() {
               onChange={(e) => setForm({ ...form, cantidad: Number(e.target.value) })}
               className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Categoría</label>
+            <div className="flex gap-2">
+              <select
+                value={form.categoria}
+                onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              >
+                <option value="">Seleccionar...</option>
+                {state.categorias.map((cat) => (
+                  <option key={cat.id} value={cat.nombre}>
+                    {cat.nombre}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCatalogModal('categoria')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('categoria')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Equipo / Máquina</label>
+            <div className="flex gap-2">
+              <select
+                value={form.equipo}
+                onChange={(e) => setForm({ ...form, equipo: e.target.value })}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              >
+                <option value="">Seleccionar...</option>
+                {state.equipos.map((eq) => (
+                  <option key={eq.id} value={eq.nombre}>
+                    {eq.nombre}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCatalogModal('equipo')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => openCatalogManager('equipo')}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
+              >
+                <Settings className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Vale / Documento</label>
@@ -377,7 +524,7 @@ export default function Salidas() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E6EF]">
-                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Vale', 'Zona', 'Supervisor'].map((header) => (
+                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Categoría', 'Equipo', 'Vale', 'Zona', 'Supervisor'].map((header) => (
                   <th
                     key={header}
                     className="px-3 py-3 text-left uppercase text-xs tracking-wider font-semibold text-[#6B7A99] whitespace-nowrap"
@@ -390,20 +537,25 @@ export default function Salidas() {
             <tbody>
               {state.movimientos
                 .filter((movimiento) => movimiento.tipo === 'salida')
-                .map((movimiento, index) => (
-                  <tr
-                    key={movimiento.id}
-                    className={`${index % 2 ? 'bg-gray-50/50' : ''} border-b border-[#E2E6EF]`}
-                  >
-                    <td className="px-3 py-2.5">{movimiento.fecha}</td>
-                    <td className="px-3 py-2.5 font-medium">{movimiento.materialCodigo}</td>
-                    <td className="px-3 py-2.5">{movimiento.materialDescripcion}</td>
-                    <td className="px-3 py-2.5 text-center font-semibold">{movimiento.cantidad}</td>
-                    <td className="px-3 py-2.5">{movimiento.documento}</td>
-                    <td className="px-3 py-2.5">{movimiento.zona}</td>
-                    <td className="px-3 py-2.5 text-[#6B7A99]">{movimiento.supervisor}</td>
-                  </tr>
-                ))}
+                .map((movimiento, index) => {
+                  const parsed = parseObservaciones(movimiento.observaciones);
+                  return (
+                    <tr
+                      key={movimiento.id}
+                      className={`${index % 2 ? 'bg-gray-50/50' : ''} border-b border-[#E2E6EF]`}
+                    >
+                      <td className="px-3 py-2.5">{movimiento.fecha}</td>
+                      <td className="px-3 py-2.5 font-medium">{movimiento.materialCodigo}</td>
+                      <td className="px-3 py-2.5">{movimiento.materialDescripcion}</td>
+                      <td className="px-3 py-2.5 text-center font-semibold">{movimiento.cantidad}</td>
+                      <td className="px-3 py-2.5">{parsed.categoria}</td>
+                      <td className="px-3 py-2.5">{parsed.equipo}</td>
+                      <td className="px-3 py-2.5">{movimiento.documento}</td>
+                      <td className="px-3 py-2.5">{movimiento.zona}</td>
+                      <td className="px-3 py-2.5 text-[#6B7A99]">{movimiento.supervisor}</td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -412,7 +564,7 @@ export default function Salidas() {
       <Modal
         isOpen={catalogModal !== null}
         onClose={() => setCatalogModal(null)}
-        title={catalogModal === 'zona' ? 'Nueva zona destino' : 'Nuevo supervisor'}
+        title={getModalTitle()}
         size="sm"
       >
         <div className="space-y-4">
@@ -440,7 +592,7 @@ export default function Salidas() {
           setEditingCatalogId(null);
           setEditingCatalogName('');
         }}
-        title={catalogManager === 'zona' ? 'Gestionar zonas destino' : 'Gestionar supervisores'}
+        title={getCatalogTitle()}
         size="md"
       >
         <div className="space-y-3">
