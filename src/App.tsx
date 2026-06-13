@@ -11,6 +11,7 @@ import Salidas from './pages/Salidas';
 import Despachos from './pages/Despachos';
 import Inventarios from './pages/Inventarios';
 import Activos from './pages/Activos';
+import Empleados from './pages/Empleados';
 import Flota from './pages/Flota';
 import Reportes from './pages/Reportes';
 import Alertas from './pages/Alertas';
@@ -46,6 +47,7 @@ function AppRoutes() {
         </Route>
         <Route path="inventarios" element={<Inventarios />} />
         <Route path="activos" element={<Activos />} />
+        <Route path="empleados" element={<Empleados />} />
         <Route path="flota" element={<Flota />} />
         <Route element={<RoleRoute allowedRoles={['Administrador', 'Supervisor']} />}>
           <Route path="reportes" element={<Reportes />} />

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Package, PackagePlus, PackageMinus,
   Truck, ClipboardList, Monitor, Car, BarChart3, Bell, Settings,
-  TrendingUp, Building2,
+  TrendingUp, Building2, Users,
 } from 'lucide-react';
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/despachos', label: 'Despachos', icon: Truck },
   { to: '/inventarios', label: 'Inventarios', icon: ClipboardList },
   { to: '/activos', label: 'Activos', icon: Monitor },
+  { to: '/empleados', label: 'Empleados', icon: Users },
   { to: '/flota', label: 'Flota', icon: Car },
   { to: '/reportes', label: 'Reportes', icon: BarChart3 },
   { to: '/alertas', label: 'Alertas', icon: Bell },

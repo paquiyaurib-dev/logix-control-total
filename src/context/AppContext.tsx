@@ -25,6 +25,7 @@ import {
   addTareo as addTareoRemote,
   appendAuditEntry,
   deleteMovimiento as deleteMovimientoRemote,
+  deletePersonal as deletePersonalRemote,
   loadAppData,
   replaceCatalog,
   replaceProveedores,
@@ -414,6 +415,7 @@ interface AppContextType {
   saveEquipos: (equipos: CatalogItem[]) => Promise<void>;
   addPersonal: (p: Personal) => Promise<void>;
   savePersonal: (personal: Personal[]) => Promise<void>;
+  deletePersonal: (personalId: number) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -819,6 +821,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const savePersonal = async (personal: Personal[]) => {
     dispatch({ type: 'SET_PERSONAL', payload: personal });
   };
+  const deletePersonal = async (personalId: number) => {
+    dispatch({ type: 'SET_PERSONAL', payload: state.personal.filter((item) => item.id !== personalId) });
+    try {
+      await deletePersonalRemote(personalId);
+    } catch {
+      return;
+    }
+  };
 
   const value = useMemo(
     () => ({
@@ -845,6 +855,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveEquipos,
       addPersonal,
       savePersonal,
+      deletePersonal,
     }),
     [state]
   );
