@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle, Pencil, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Pencil, Settings, Trash2, UserPlus } from 'lucide-react';
 import { useApp, type CatalogItem } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import type { Personal } from '../data/mockData';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
@@ -18,6 +19,7 @@ export default function Salidas() {
     saveSupervisores,
     saveCategorias,
     saveEquipos,
+    addPersonal,
   } = useApp();
   const { state: authState } = useAuth();
 
@@ -30,6 +32,10 @@ export default function Salidas() {
   const [editingCatalogName, setEditingCatalogName] = useState('');
   const [materialSearch, setMaterialSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dniSearch, setDniSearch] = useState('');
+  const [foundPersonal, setFoundPersonal] = useState<Personal | null>(null);
+  const [showNewPersonalModal, setShowNewPersonalModal] = useState(false);
+  const [newPersonalForm, setNewPersonalForm] = useState({ dni: '', nombres: '', apellidos: '', cargo: '', area: '' });
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
     materialId: '',
@@ -40,6 +46,7 @@ export default function Salidas() {
     zona: '',
     bodeguero: authState.user?.nombre || '',
     supervisor: '',
+    solicitante: '',
     observaciones: '',
   });
 
@@ -61,6 +68,41 @@ export default function Salidas() {
       .slice(0, 8);
   }, [materialSearch, state.materiales]);
 
+  const handleDniSearch = (dni: string) => {
+    setDniSearch(dni);
+    if (dni.length === 8) {
+      const found = state.personal.find((p) => p.dni === dni);
+      if (found) {
+        setFoundPersonal(found);
+        setForm((f) => ({ ...f, solicitante: `${found.dni} - ${found.nombres} ${found.apellidos} (${found.cargo})` }));
+      } else {
+        setFoundPersonal(null);
+        setForm((f) => ({ ...f, solicitante: '' }));
+      }
+    } else {
+      setFoundPersonal(null);
+      setForm((f) => ({ ...f, solicitante: '' }));
+    }
+  };
+
+  const handleCreatePersonal = async () => {
+    const p: Personal = {
+      id: Date.now(),
+      dni: newPersonalForm.dni,
+      nombres: newPersonalForm.nombres,
+      apellidos: newPersonalForm.apellidos,
+      cargo: newPersonalForm.cargo,
+      area: newPersonalForm.area,
+      activo: true,
+    };
+    await addPersonal(p);
+    setFoundPersonal(p);
+    setDniSearch(p.dni);
+    setForm((f) => ({ ...f, solicitante: `${p.dni} - ${p.nombres} ${p.apellidos} (${p.cargo})` }));
+    setShowNewPersonalModal(false);
+    setNewPersonalForm({ dni: '', nombres: '', apellidos: '', cargo: '', area: '' });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -78,6 +120,7 @@ export default function Salidas() {
       zona: form.zona,
       bodeguero: form.bodeguero,
       supervisor: form.supervisor,
+      solicitante: form.solicitante,
       observaciones: `Cat: ${form.categoria} | Equipo: ${form.equipo} | ${form.observaciones}`,
       usuario: authState.user?.nombre || 'Sistema',
     });
@@ -89,6 +132,8 @@ export default function Salidas() {
 
     setSuccess(true);
     setTimeout(() => setSuccess(false), 3000);
+    setDniSearch('');
+    setFoundPersonal(null);
     setForm({
       ...form,
       materialId: '',
@@ -98,6 +143,7 @@ export default function Salidas() {
       equipo: '',
       zona: '',
       supervisor: '',
+      solicitante: '',
       observaciones: '',
     });
     setMaterialSearch('');
@@ -426,6 +472,39 @@ export default function Salidas() {
             </div>
           </div>
           <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Solicitante (DNI)</label>
+            <div className="flex gap-2">
+              <input
+                value={dniSearch}
+                onChange={(e) => handleDniSearch(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="Ingrese DNI (8 dígitos)..."
+                maxLength={8}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPersonalForm({ dni: dniSearch, nombres: '', apellidos: '', cargo: '', area: '' });
+                  setShowNewPersonalModal(true);
+                }}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
+                title="Registrar nuevo personal"
+              >
+                <UserPlus className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
+            {foundPersonal && (
+              <div className="mt-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                ✓ {foundPersonal.nombres} {foundPersonal.apellidos} — {foundPersonal.cargo}
+              </div>
+            )}
+            {dniSearch.length === 8 && !foundPersonal && (
+              <div className="mt-1 text-xs text-orange-600 bg-orange-50 rounded px-2 py-1">
+                DNI no encontrado. Use + para registrar.
+              </div>
+            )}
+          </div>
+          <div>
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Vale / Documento</label>
             <input
               value={form.vale}
@@ -525,7 +604,7 @@ export default function Salidas() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E6EF]">
-                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Categoría', 'Equipo', 'Vale', 'Zona', 'Supervisor', ''].map((header) => (
+                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Categoría', 'Equipo', 'Solicitante', 'Vale', 'Zona', 'Supervisor', ''].map((header) => (
                   <th
                     key={header || 'actions'}
                     className="px-3 py-3 text-left uppercase text-xs tracking-wider font-semibold text-[#6B7A99] whitespace-nowrap"
@@ -551,6 +630,7 @@ export default function Salidas() {
                       <td className="px-3 py-2.5 text-center font-semibold">{movimiento.cantidad}</td>
                       <td className="px-3 py-2.5">{parsed.categoria}</td>
                       <td className="px-3 py-2.5">{parsed.equipo}</td>
+                      <td className="px-3 py-2.5">{movimiento.solicitante || ''}</td>
                       <td className="px-3 py-2.5">{movimiento.documento}</td>
                       <td className="px-3 py-2.5">{movimiento.zona}</td>
                       <td className="px-3 py-2.5 text-[#6B7A99]">{movimiento.supervisor}</td>
@@ -637,6 +717,55 @@ export default function Salidas() {
               )}
             </div>
           ))}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showNewPersonalModal}
+        onClose={() => setShowNewPersonalModal(false)}
+        title="Registrar nuevo personal"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">DNI</label>
+              <input
+                value={newPersonalForm.dni}
+                onChange={(e) => setNewPersonalForm({ ...newPersonalForm, dni: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                maxLength={8}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Cargo</label>
+              <input
+                value={newPersonalForm.cargo}
+                onChange={(e) => setNewPersonalForm({ ...newPersonalForm, cargo: e.target.value })}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Nombres</label>
+              <input
+                value={newPersonalForm.nombres}
+                onChange={(e) => setNewPersonalForm({ ...newPersonalForm, nombres: e.target.value })}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Apellidos</label>
+              <input
+                value={newPersonalForm.apellidos}
+                onChange={(e) => setNewPersonalForm({ ...newPersonalForm, apellidos: e.target.value })}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowNewPersonalModal(false)}>Cancelar</Button>
+            <Button onClick={handleCreatePersonal}>Guardar</Button>
+          </div>
         </div>
       </Modal>
     </motion.div>

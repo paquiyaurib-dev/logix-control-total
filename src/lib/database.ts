@@ -8,7 +8,7 @@ import type {
   MovementClassItem,
   WarehouseInventory,
 } from '../context/AppContext';
-import type { Activo, Alerta, DespachoRecord, Material, Movimiento, Proveedor, Tareo, Vehiculo } from '../data/mockData';
+import type { Activo, Alerta, DespachoRecord, Material, Movimiento, Personal, Proveedor, Tareo, Vehiculo } from '../data/mockData';
 
 type UUID = string;
 
@@ -355,6 +355,7 @@ const mapDespachoRow = (row: DespachoRow, materialesByUuid: Map<string, Material
   const material = row.material_id ? materialesByUuid.get(row.material_id) : undefined;
   return {
     id: toNumericId(row.id),
+    tipoDespacho: (row as any).tipo_despacho === 'interno' ? 'interno' : 'externo',
     materialId: material?.id ?? 0,
     materialCodigo: material?.codigo ?? '',
     materialDescripcion: material?.descripcion ?? row.descripcion,
@@ -411,7 +412,7 @@ export async function replaceUsuarios(users: StoredUser[]) {
 }
 
 export async function loadAppData(defaultState: AppState): Promise<AppState> {
-  const [materialRows, proveedorRows, movimientoRows, activoRows, vehiculoRows, tareoRows, alertaRows, catalogoRows, despachoRows] =
+  const [materialRows, proveedorRows, movimientoRows, activoRows, vehiculoRows, tareoRows, alertaRows, catalogoRows, despachoRows, personalRows] =
     await Promise.all([
       selectAll<MaterialRow>('materiales'),
       selectAll<ProveedorRow>('proveedores'),
@@ -422,6 +423,7 @@ export async function loadAppData(defaultState: AppState): Promise<AppState> {
       selectAll<AlertaRow>('alertas'),
       selectAll<CatalogoRow>('catalogos'),
       selectAll<DespachoRow>('despachos'),
+      selectAll<{ id: string; dni: string; nombres: string; apellidos: string; cargo: string; area: string; activo: boolean }>('personal'),
     ]);
 
   const inventoryCatalogs = catalogoRows.filter((row) => row.tipo === 'inventario_bodega');
@@ -457,6 +459,16 @@ export async function loadAppData(defaultState: AppState): Promise<AppState> {
     laboresActividad: catalogosByTipo('labor').map(mapCatalogRow).length > 0 ? catalogosByTipo('labor').map(mapCatalogRow) : defaultState.laboresActividad,
     supervisores: catalogosByTipo('supervisor').map(mapCatalogRow).length > 0 ? catalogosByTipo('supervisor').map(mapCatalogRow) : defaultState.supervisores,
     clasesMovimiento: catalogosByTipo('clase').map(mapMovementClassRow).length > 0 ? catalogosByTipo('clase').map(mapMovementClassRow) : defaultState.clasesMovimiento,
+    equipos: catalogosByTipo('equipo').map(mapCatalogRow).length > 0 ? catalogosByTipo('equipo').map(mapCatalogRow) : defaultState.equipos,
+    personal: personalRows.map((row) => ({
+      id: toNumericId(row.id),
+      dni: row.dni,
+      nombres: row.nombres,
+      apellidos: row.apellidos,
+      cargo: row.cargo,
+      area: row.area,
+      activo: row.activo,
+    })),
     auditLog: defaultState.auditLog,
     lastUpdatedAt: Date.now(),
   };
@@ -677,22 +689,47 @@ export async function addDespacho(despacho: DespachoRecord, materialUuid?: strin
     throw error;
   }
 
-  // Update stock_actual in materiales (despacho = salida, siempre restar)
-  const resolvedMaterialUuid = materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, despacho.materialId);
-  if (resolvedMaterialUuid) {
-    const { data: currentMaterial } = await supabase
-      .from('materiales')
-      .select('stock_actual')
-      .eq('id', resolvedMaterialUuid)
-      .single();
-
-    if (currentMaterial) {
-      const newStock = (currentMaterial.stock_actual || 0) - despacho.cantidad;
-      await supabase
+  // Update stock_actual in materiales (only for external despachos)
+  if (despacho.tipoDespacho !== 'interno') {
+    const resolvedMaterialUuid = materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, despacho.materialId);
+    if (resolvedMaterialUuid) {
+      const { data: currentMaterial } = await supabase
         .from('materiales')
-        .update({ stock_actual: newStock })
-        .eq('id', resolvedMaterialUuid);
+        .select('stock_actual')
+        .eq('id', resolvedMaterialUuid)
+        .single();
+
+      if (currentMaterial) {
+        const newStock = (currentMaterial.stock_actual || 0) - despacho.cantidad;
+        await supabase
+          .from('materiales')
+          .update({ stock_actual: newStock })
+          .eq('id', resolvedMaterialUuid);
+      }
     }
+  }
+}
+
+export async function upsertPersonal(p: Personal) {
+  const { error } = await supabase.from('personal').upsert({
+    id: toUuidId(p.id),
+    dni: p.dni,
+    nombres: p.nombres,
+    apellidos: p.apellidos,
+    cargo: p.cargo,
+    area: p.area,
+    activo: p.activo,
+  });
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deletePersonal(personalId: number) {
+  const uuid = toUuidId(personalId);
+  const { error } = await supabase.from('personal').delete().eq('id', uuid);
+  if (error) {
+    throw error;
   }
 }
 

@@ -27,6 +27,7 @@ export default function Despachos() {
   const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
   const [editingCatalogName, setEditingCatalogName] = useState('');
   const [form, setForm] = useState({
+    tipoDespacho: 'interno' as 'interno' | 'externo',
     materialId: '',
     cantidad: 0,
     labor: '',
@@ -65,6 +66,7 @@ export default function Despachos() {
     }
 
     await addDespacho({
+      tipoDespacho: form.tipoDespacho,
       materialId: selectedMaterial.id,
       materialCodigo: selectedMaterial.codigo,
       materialDescripcion: selectedMaterial.descripcion,
@@ -225,8 +227,19 @@ export default function Despachos() {
       )}
 
       <div className="bg-white rounded-xl border border-[#E2E6EF] p-6">
-        <h3 className="font-display font-semibold text-[#1B2A4A] mb-4">Registrar Despacho Interno</h3>
+        <h3 className="font-display font-semibold text-[#1B2A4A] mb-4">Registrar Despacho</h3>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Tipo de Despacho</label>
+            <select
+              value={form.tipoDespacho}
+              onChange={(e) => setForm({ ...form, tipoDespacho: e.target.value as 'interno' | 'externo' })}
+              className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+            >
+              <option value="interno">Interno (no afecta stock)</option>
+              <option value="externo">Externo (resta stock)</option>
+            </select>
+          </div>
           <div className="relative">
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Código Material</label>
             <input
@@ -414,7 +427,7 @@ export default function Despachos() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E6EF]">
-                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Labor', 'Supervisor', 'Observaciones'].map((header) => (
+                {['Fecha', 'Tipo', 'Código', 'Descripción', 'Cantidad', 'Labor', 'Supervisor', 'Observaciones'].map((header) => (
                   <th
                     key={header}
                     className="px-3 py-3 text-left uppercase text-xs tracking-wider font-semibold text-[#6B7A99] whitespace-nowrap"
@@ -431,6 +444,11 @@ export default function Despachos() {
                   className={`${index % 2 ? 'bg-gray-50/50' : ''} border-b border-[#E2E6EF]`}
                 >
                   <td className="px-3 py-2.5">{despacho.fecha}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${despacho.tipoDespacho === 'interno' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                      {despacho.tipoDespacho === 'interno' ? 'Interno' : 'Externo'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2.5 font-medium">{despacho.materialCodigo}</td>
                   <td className="px-3 py-2.5">{despacho.materialDescripcion}</td>
                   <td className="px-3 py-2.5 text-center font-semibold">{despacho.cantidad}</td>

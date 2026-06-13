@@ -8,6 +8,7 @@ import {
   Tareo,
   DespachoRecord,
   Proveedor,
+  Personal,
   materiales as mockMateriales,
   movimientos as mockMovimientos,
   alertas as mockAlertas,
@@ -16,6 +17,7 @@ import {
   tareos as mockTareos,
   despachos as mockDespachos,
   proveedores as mockProveedores,
+  personal as mockPersonal,
 } from '../data/mockData';
 import {
   addDespacho as addDespachoRemote,
@@ -29,6 +31,7 @@ import {
   upsertActivo,
   upsertAlerta,
   upsertMaterial,
+  upsertPersonal,
 } from '../lib/database';
 
 export interface CatalogItem {
@@ -75,6 +78,7 @@ export interface AppState {
   laboresActividad: CatalogItem[];
   supervisores: CatalogItem[];
   equipos: CatalogItem[];
+  personal: Personal[];
   clasesMovimiento: MovementClassItem[];
   auditLog: AuditEntry[];
   lastUpdatedAt: number;
@@ -102,6 +106,7 @@ type AppAction =
   | { type: 'SET_LABORES_ACTIVIDAD'; payload: CatalogItem[] }
   | { type: 'SET_SUPERVISORES'; payload: CatalogItem[] }
   | { type: 'SET_EQUIPOS'; payload: CatalogItem[] }
+  | { type: 'SET_PERSONAL'; payload: Personal[] }
   | { type: 'HYDRATE'; payload: AppState };
 
 const CHANNEL_NAME = 'logix-sync';
@@ -224,6 +229,7 @@ const initialState: AppState = {
   laboresActividad: defaultLaboresActividad,
   supervisores: defaultSupervisores,
   equipos: [],
+  personal: mockPersonal,
   clasesMovimiento: defaultClasesMovimiento,
   auditLog: [],
   lastUpdatedAt: Date.now(),
@@ -377,6 +383,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return stamp({ ...state, supervisores: action.payload });
     case 'SET_EQUIPOS':
       return stamp({ ...state, equipos: action.payload });
+    case 'SET_PERSONAL':
+      return stamp({ ...state, personal: action.payload });
     default:
       return state;
   }
@@ -404,6 +412,8 @@ interface AppContextType {
   saveLaboresActividad: (laboresActividad: CatalogItem[]) => Promise<void>;
   saveSupervisores: (supervisores: CatalogItem[]) => Promise<void>;
   saveEquipos: (equipos: CatalogItem[]) => Promise<void>;
+  addPersonal: (p: Personal) => Promise<void>;
+  savePersonal: (personal: Personal[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -436,6 +446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           laboresActividad: parsed.laboresActividad ?? baseState.laboresActividad,
           supervisores: parsed.supervisores ?? baseState.supervisores,
           equipos: parsed.equipos ?? baseState.equipos,
+          personal: parsed.personal ?? baseState.personal,
           clasesMovimiento: parsed.clasesMovimiento ?? baseState.clasesMovimiento,
           auditLog: parsed.auditLog ?? baseState.auditLog,
           lastUpdatedAt: parsed.lastUpdatedAt ?? baseState.lastUpdatedAt,
@@ -612,6 +623,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDespacho = async (d: Partial<DespachoRecord>) => {
     const newDespacho: DespachoRecord = {
       id: Date.now(),
+      tipoDespacho: 'externo',
       materialId: 0,
       materialCodigo: '',
       materialDescripcion: '',
@@ -626,7 +638,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_DESPACHO', payload: newDespacho });
     try {
       await addDespachoRemote(newDespacho);
-      if (materialBeforeDespacho) {
+      if (newDespacho.tipoDespacho !== 'interno' && materialBeforeDespacho) {
         const updatedMaterial = {
           ...materialBeforeDespacho,
           stockActual: Math.max(0, materialBeforeDespacho.stockActual - newDespacho.cantidad),
@@ -796,6 +808,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
   };
+  const addPersonal = async (p: Personal) => {
+    dispatch({ type: 'SET_PERSONAL', payload: [...state.personal, p] });
+    try {
+      await upsertPersonal(p);
+    } catch {
+      return;
+    }
+  };
+  const savePersonal = async (personal: Personal[]) => {
+    dispatch({ type: 'SET_PERSONAL', payload: personal });
+  };
 
   const value = useMemo(
     () => ({
@@ -820,6 +843,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveLaboresActividad,
       saveSupervisores,
       saveEquipos,
+      addPersonal,
+      savePersonal,
     }),
     [state]
   );

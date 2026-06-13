@@ -39,6 +39,17 @@ export interface Movimiento {
   supervisor: string;
   observaciones: string;
   usuario: string;
+  solicitante?: string;
+}
+
+export interface Personal {
+  id: number;
+  dni: string;
+  nombres: string;
+  apellidos: string;
+  cargo: string;
+  area: string;
+  activo: boolean;
 }
 
 export interface Activo {
@@ -110,6 +121,7 @@ export interface Tareo {
 
 export interface DespachoRecord {
   id: number;
+  tipoDespacho: 'interno' | 'externo';
   materialId: number;
   materialCodigo: string;
   materialDescripcion: string;
@@ -168,6 +180,7 @@ export const usuarios: Usuario[] = [
 
 export const tareos: Tareo[] = [];
 export const despachos: DespachoRecord[] = [];
+export const personal: Personal[] = [];
 
 export const zonasDestino: string[] = [
   'Zona Norte',

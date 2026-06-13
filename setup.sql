@@ -146,6 +146,18 @@ alter table public.alertas enable row level security;
 alter table public.catalogos enable row level security;
 alter table public.despachos enable row level security;
 
+create table if not exists public.personal (
+  id uuid primary key default gen_random_uuid(),
+  dni text not null unique,
+  nombres text not null,
+  apellidos text not null,
+  cargo text not null,
+  area text not null default '',
+  activo boolean not null default true
+);
+
+alter table public.personal enable row level security;
+
 drop policy if exists "anon_all_usuarios" on public.usuarios;
 create policy "anon_all_usuarios" on public.usuarios for all to anon using (true) with check (true);
 drop policy if exists "anon_all_materiales" on public.materiales;
@@ -166,6 +178,8 @@ drop policy if exists "anon_all_catalogos" on public.catalogos;
 create policy "anon_all_catalogos" on public.catalogos for all to anon using (true) with check (true);
 drop policy if exists "anon_all_despachos" on public.despachos;
 create policy "anon_all_despachos" on public.despachos for all to anon using (true) with check (true);
+drop policy if exists "anon_all_personal" on public.personal;
+create policy "anon_all_personal" on public.personal for all to anon using (true) with check (true);
 
 insert into public.usuarios (username, password, nombre, rol, planta, avatar)
 values ('admin', 'admin123', 'Administrador Principal', 'Administrador', 'Planta Principal', 'AP')
