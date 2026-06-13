@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Pencil } from 'lucide-react';
+import { Settings, Pencil, Download, Upload } from 'lucide-react';
 import { StoredUser, useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import Badge from '../components/ui/Badge';
@@ -10,11 +10,13 @@ import Modal from '../components/ui/Modal';
 const tabs = ['Usuarios', 'Perfil', 'Sistema'] as const;
 
 export default function Configuracion() {
-  const { state: authState, saveUsers } = useAuth();
+  const { state: authState, saveUsers, importUsersFromFile } = useAuth();
   const { state: appState } = useApp();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const [activeTab, setActiveTab] = useState<string>(tabs[0]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState('');
   const [form, setForm] = useState({
     nombre: '',
     username: '',
@@ -74,6 +76,24 @@ export default function Configuracion() {
     saveUsers(authState.users.filter((user) => user.id !== userId));
   };
 
+  const handleExportUsers = () => {
+    const blob = new Blob([JSON.stringify(authState.users, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'usuarios-logix.json';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleImportUsers = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const result = await importUsersFromFile(file);
+    setImportMessage(result.message);
+    event.target.value = '';
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       {/* Tabs */}
@@ -88,8 +108,26 @@ export default function Configuracion() {
         <div className="space-y-4">
           {!isAdmin && <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">Solo los administradores pueden gestionar usuarios.</div>}
           {isAdmin && (
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={handleImportUsers}
+              />
+              <Button variant="secondary" onClick={handleExportUsers} icon={<Download className="w-4 h-4" />}>
+                Exportar Usuarios
+              </Button>
+              <Button variant="secondary" onClick={() => importInputRef.current?.click()} icon={<Upload className="w-4 h-4" />}>
+                Importar Usuarios
+              </Button>
               <Button onClick={openCreate}>Nuevo Usuario</Button>
+            </div>
+          )}
+          {importMessage && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              {importMessage}
             </div>
           )}
           <div className="bg-white rounded-xl border border-[#E2E6EF] overflow-x-auto">

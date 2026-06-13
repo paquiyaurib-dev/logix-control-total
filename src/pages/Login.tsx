@@ -6,13 +6,22 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, importUsersFromFile } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
+
+  const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const result = await importUsersFromFile(file);
+    setImportMessage(result.message);
+    event.target.value = '';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +120,10 @@ export default function Login() {
             <p className="text-red-500 text-sm text-center">{error}</p>
           )}
 
+          {importMessage && (
+            <p className="text-[#1B2A4A] text-sm text-center">{importMessage}</p>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -145,6 +158,18 @@ export default function Login() {
             )}
           </button>
         </form>
+
+        <div className="mt-5 text-center">
+          <label className="text-xs text-[#6B7A99] hover:text-[#1B2A4A] cursor-pointer">
+            Importar configuración
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleImportConfig}
+            />
+          </label>
+        </div>
       </motion.div>
     </div>
   );

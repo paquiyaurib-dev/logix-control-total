@@ -1,0 +1,11 @@
+[
+  {
+    "id": "1",
+    "username": "admin",
+    "password": "admin123",
+    "nombre": "Administrador Principal",
+    "rol": "Administrador",
+    "planta": "Planta Principal",
+    "avatar": "AP"
+  }
+]

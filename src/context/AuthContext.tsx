@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 
 export type UserRole = 'Administrador' | 'Supervisor' | 'Bodeguero' | 'Consulta';
 
@@ -30,6 +30,7 @@ type AuthAction =
 const AUTH_STORAGE_KEY = 'logix-auth-state';
 const USERS_STORAGE_KEY = 'logix-users';
 const CHANNEL_NAME = 'logix-auth-sync';
+const USERS_FALLBACK_URL = '/users.json';
 
 const adminUser: StoredUser = {
   id: '1',
@@ -86,11 +87,13 @@ interface AuthContextType {
   login: (username: string, password: string) => boolean;
   logout: () => void;
   saveUsers: (users: StoredUser[]) => void;
+  importUsersFromFile: (file: File) => Promise<{ ok: boolean; message: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [fallbackLoaded, setFallbackLoaded] = useState(false);
   const [state, dispatch] = useReducer(authReducer, initialState, (baseState) => {
     if (typeof window === 'undefined') return baseState;
     try {
@@ -123,6 +126,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       channel.close();
     }
   }, [state]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || fallbackLoaded) return;
+    const rawUsers = window.localStorage.getItem(USERS_STORAGE_KEY);
+    if (rawUsers) {
+      setFallbackLoaded(true);
+      return;
+    }
+
+    const loadFallbackUsers = async () => {
+      try {
+        const response = await fetch(USERS_FALLBACK_URL, { cache: 'no-store' });
+        if (!response.ok) {
+          setFallbackLoaded(true);
+          return;
+        }
+        const users = normalizeUsers((await response.json()) as StoredUser[]);
+        dispatch({ type: 'SET_USERS', payload: users });
+      } catch {
+        return;
+      } finally {
+        setFallbackLoaded(true);
+      }
+    };
+
+    void loadFallbackUsers();
+  }, [fallbackLoaded]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -172,8 +202,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => dispatch({ type: 'LOGOUT' });
   const saveUsers = (users: StoredUser[]) => dispatch({ type: 'SET_USERS', payload: users });
+  const importUsersFromFile = async (file: File) => {
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as StoredUser[];
+      if (!Array.isArray(parsed)) {
+        return { ok: false, message: 'El archivo no contiene una lista válida de usuarios.' };
+      }
+      const users = normalizeUsers(parsed);
+      dispatch({ type: 'SET_USERS', payload: users });
+      return { ok: true, message: `${users.length} usuarios importados correctamente.` };
+    } catch {
+      return { ok: false, message: 'No se pudo importar el archivo JSON de usuarios.' };
+    }
+  };
 
-  const value = useMemo(() => ({ state, login, logout, saveUsers }), [state]);
+  const value = useMemo(() => ({ state, login, logout, saveUsers, importUsersFromFile }), [state]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
