@@ -592,6 +592,14 @@ export async function addMovimiento(movimiento: Movimiento, materialUuid?: strin
   }
 }
 
+export async function deleteMovimiento(movimientoId: number) {
+  const uuid = toUuidId(movimientoId);
+  const { error } = await supabase.from('movimientos').delete().eq('id', uuid);
+  if (error) {
+    throw error;
+  }
+}
+
 export async function upsertActivo(activo: Activo) {
   const { error } = await supabase.from('activos').upsert({
     id: toUuidId(activo.id),

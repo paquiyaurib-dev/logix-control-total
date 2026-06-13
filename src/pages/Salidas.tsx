@@ -13,6 +13,7 @@ export default function Salidas() {
   const {
     state,
     addSalida,
+    removeMovimiento,
     saveZonasDestino,
     saveSupervisores,
     saveCategorias,
@@ -524,9 +525,9 @@ export default function Salidas() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E6EF]">
-                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Categoría', 'Equipo', 'Vale', 'Zona', 'Supervisor'].map((header) => (
+                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Categoría', 'Equipo', 'Vale', 'Zona', 'Supervisor', ''].map((header) => (
                   <th
-                    key={header}
+                    key={header || 'actions'}
                     className="px-3 py-3 text-left uppercase text-xs tracking-wider font-semibold text-[#6B7A99] whitespace-nowrap"
                   >
                     {header}
@@ -553,6 +554,16 @@ export default function Salidas() {
                       <td className="px-3 py-2.5">{movimiento.documento}</td>
                       <td className="px-3 py-2.5">{movimiento.zona}</td>
                       <td className="px-3 py-2.5 text-[#6B7A99]">{movimiento.supervisor}</td>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => removeMovimiento(movimiento.id)}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
+                          title="Eliminar salida"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

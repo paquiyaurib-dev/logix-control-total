@@ -13,6 +13,7 @@ export default function Ingresos() {
   const {
     state,
     addIngreso,
+    removeMovimiento,
     saveProveedores,
     saveClasesMovimiento,
   } = useApp();
@@ -397,9 +398,9 @@ export default function Ingresos() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E2E6EF]">
-                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Documento', 'Proveedor', 'Usuario'].map((header) => (
+                {['Fecha', 'Código', 'Descripción', 'Cantidad', 'Documento', 'Proveedor', 'Usuario', ''].map((header) => (
                   <th
-                    key={header}
+                    key={header || 'actions'}
                     className="px-3 py-3 text-left uppercase text-xs tracking-wider font-semibold text-[#6B7A99] whitespace-nowrap"
                   >
                     {header}
@@ -422,6 +423,16 @@ export default function Ingresos() {
                     <td className="px-3 py-2.5">{movimiento.documento}</td>
                     <td className="px-3 py-2.5">{movimiento.proveedor}</td>
                     <td className="px-3 py-2.5">{movimiento.usuario}</td>
+                    <td className="px-3 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => removeMovimiento(movimiento.id)}
+                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
+                        title="Eliminar ingreso"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
             </tbody>

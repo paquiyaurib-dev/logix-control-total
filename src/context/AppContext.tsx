@@ -22,6 +22,7 @@ import {
   addMovimiento as addMovimientoRemote,
   addTareo as addTareoRemote,
   appendAuditEntry,
+  deleteMovimiento as deleteMovimientoRemote,
   loadAppData,
   replaceCatalog,
   replaceProveedores,
@@ -81,6 +82,7 @@ export interface AppState {
 
 type AppAction =
   | { type: 'ADD_MOVIMIENTO'; payload: Movimiento }
+  | { type: 'REMOVE_MOVIMIENTO'; payload: number }
   | { type: 'ADD_ALERTA'; payload: Alerta }
   | { type: 'MARK_ALERTA_READ'; payload: number }
   | { type: 'RESOLVE_ALERTA'; payload: number }
@@ -297,6 +299,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
         alertas: newAlertas,
       });
     }
+    case 'REMOVE_MOVIMIENTO': {
+      const movToRemove = state.movimientos.find((m) => m.id === action.payload);
+      let revertedMateriales = state.materiales;
+      if (movToRemove) {
+        revertedMateriales = state.materiales.map((material) => {
+          if (material.id !== movToRemove.materialId) return material;
+          const delta = movToRemove.tipo === 'ingreso' ? -movToRemove.cantidad : movToRemove.cantidad;
+          return { ...material, stockActual: Math.max(0, material.stockActual + delta) };
+        });
+      }
+      return stamp({
+        ...state,
+        movimientos: state.movimientos.filter((m) => m.id !== action.payload),
+        materiales: revertedMateriales,
+      });
+    }
     case 'ADD_ALERTA':
       return stamp({ ...state, alertas: [...state.alertas, action.payload] });
     case 'MARK_ALERTA_READ':
@@ -368,6 +386,7 @@ interface AppContextType {
   state: AppState;
   addIngreso: (mov: Partial<Movimiento>) => Promise<void>;
   addSalida: (mov: Partial<Movimiento>) => Promise<boolean>;
+  removeMovimiento: (movId: number) => Promise<void>;
   addDespacho: (d: Partial<DespachoRecord>) => Promise<void>;
   addMaterial: (m: Omit<MaterialWithWarehouseInventory, 'id' | 'inventarioPorBodega'>) => Promise<void>;
   updateMaterial: (m: MaterialWithWarehouseInventory) => Promise<void>;
@@ -504,6 +523,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       usuario: '',
       ...mov,
     };
+    const materialBeforeUpdate = state.materiales.find((m) => m.id === newMov.materialId);
     dispatch({ type: 'ADD_MOVIMIENTO', payload: newMov });
     const auditEntry = {
       id: `a-${Date.now()}`,
@@ -515,6 +535,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_AUDIT_LOG', payload: auditEntry });
     try {
       await addMovimientoRemote(newMov);
+      if (materialBeforeUpdate) {
+        const updatedMaterial = applyMovementToMaterial(materialBeforeUpdate, newMov);
+        await upsertMaterial(updatedMaterial);
+      }
       await appendAuditEntry(auditEntry);
     } catch {
       return;
@@ -541,6 +565,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       usuario: '',
       ...mov,
     };
+    const materialBeforeSalida = state.materiales.find((m) => m.id === newMov.materialId);
     dispatch({ type: 'ADD_MOVIMIENTO', payload: newMov });
     const auditEntry = {
       id: `a-${Date.now()}`,
@@ -552,11 +577,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_AUDIT_LOG', payload: auditEntry });
     try {
       await addMovimientoRemote(newMov);
+      if (materialBeforeSalida) {
+        const updatedMaterial = applyMovementToMaterial(materialBeforeSalida, newMov);
+        await upsertMaterial(updatedMaterial);
+      }
       await appendAuditEntry(auditEntry);
     } catch {
       return true;
     }
     return true;
+  };
+
+  const removeMovimiento = async (movId: number) => {
+    const mov = state.movimientos.find((m) => m.id === movId);
+    dispatch({ type: 'REMOVE_MOVIMIENTO', payload: movId });
+    try {
+      await deleteMovimientoRemote(movId);
+      if (mov) {
+        const material = state.materiales.find((m) => m.id === mov.materialId);
+        if (material) {
+          const delta = mov.tipo === 'ingreso' ? -mov.cantidad : mov.cantidad;
+          const updatedMaterial = {
+            ...material,
+            stockActual: Math.max(0, material.stockActual + delta),
+          };
+          await upsertMaterial(updatedMaterial);
+        }
+      }
+    } catch {
+      return;
+    }
   };
 
   const addDespacho = async (d: Partial<DespachoRecord>) => {
@@ -572,9 +622,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       observaciones: '',
       ...d,
     };
+    const materialBeforeDespacho = state.materiales.find((m) => m.id === newDespacho.materialId);
     dispatch({ type: 'ADD_DESPACHO', payload: newDespacho });
     try {
       await addDespachoRemote(newDespacho);
+      if (materialBeforeDespacho) {
+        const updatedMaterial = {
+          ...materialBeforeDespacho,
+          stockActual: Math.max(0, materialBeforeDespacho.stockActual - newDespacho.cantidad),
+        };
+        await upsertMaterial(updatedMaterial);
+      }
     } catch {
       return;
     }
@@ -744,6 +802,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       state,
       addIngreso,
       addSalida,
+      removeMovimiento,
       addDespacho,
       addMaterial,
       updateMaterial,
