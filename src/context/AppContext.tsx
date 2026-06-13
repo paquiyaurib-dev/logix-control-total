@@ -235,6 +235,30 @@ function syncMaterialesWithBodegas(
   return materiales.map((material) => normalizeMaterial(material, bodegas));
 }
 
+function applyMovementToMaterial(
+  material: MaterialWithWarehouseInventory,
+  mov: Movimiento,
+): MaterialWithWarehouseInventory {
+  const delta =
+    mov.tipo === 'ingreso' ? mov.cantidad : mov.tipo === 'salida' ? -mov.cantidad : 0;
+  const nextStock = Math.max(0, material.stockActual + delta);
+  const inventarioPorBodega = material.inventarioPorBodega.map((item, index) => {
+    if (index !== 0) {
+      return item;
+    }
+    return {
+      ...item,
+      stockActual: Math.max(0, item.stockActual + delta),
+    };
+  });
+  return {
+    ...material,
+    stockActual: nextStock,
+    ultimoMovimiento: mov.fecha,
+    inventarioPorBodega,
+  };
+}
+
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'HYDRATE':
@@ -245,22 +269,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         if (material.id !== mov.materialId) {
           return material;
         }
-        const delta = mov.tipo === 'ingreso' ? mov.cantidad : -mov.cantidad;
-        const inventarioPorBodega = material.inventarioPorBodega.map((item, index) => {
-          if (index !== 0) {
-            return item;
-          }
-          return {
-            ...item,
-            stockActual: Math.max(0, item.stockActual + delta),
-          };
-        });
-        return {
-          ...material,
-          stockActual: Math.max(0, material.stockActual + delta),
-          ultimoMovimiento: mov.fecha,
-          inventarioPorBodega,
-        };
+        return applyMovementToMaterial(material, mov);
       });
       const newAlertas = [...state.alertas];
       const material = updatedMateriales.find((item) => item.id === mov.materialId);

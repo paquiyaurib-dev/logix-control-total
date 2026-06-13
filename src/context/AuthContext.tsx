@@ -20,12 +20,14 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   users: StoredUser[];
+  initialized: boolean;
 }
 
 type AuthAction =
   | { type: 'LOGIN'; payload: User }
   | { type: 'LOGOUT' }
   | { type: 'SET_USERS'; payload: StoredUser[] }
+  | { type: 'INITIALIZE_USERS'; payload: StoredUser[] }
   | { type: 'HYDRATE'; payload: AuthState };
 
 const AUTH_STORAGE_KEY = 'logix-auth-state';
@@ -54,10 +56,18 @@ function normalizeUsers(users: StoredUser[]): StoredUser[] {
   ];
 }
 
+function sanitizeHydratedUser(user: User | null, users: StoredUser[]) {
+  if (!user) {
+    return null;
+  }
+  return users.find((item) => item.username === user.username) ?? null;
+}
+
 const initialState: AuthState = {
   user: null,
   isAuthenticated: false,
   users: [adminUser],
+  initialized: false,
 };
 
 function authReducer(state: AuthState, action: AuthAction): AuthState {
@@ -76,8 +86,28 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         isAuthenticated: Boolean(nextUser),
       };
     }
+    case 'INITIALIZE_USERS': {
+      const users = normalizeUsers(action.payload);
+      const currentUsername = state.user?.username;
+      const nextUser = currentUsername ? users.find((item) => item.username === currentUsername) ?? null : null;
+      return {
+        ...state,
+        users,
+        user: nextUser ?? state.user,
+        isAuthenticated: state.isAuthenticated && Boolean(nextUser ?? state.user),
+        initialized: true,
+      };
+    }
     case 'HYDRATE':
-      return { ...action.payload, users: normalizeUsers(action.payload.users) };
+      const hydratedUsers = normalizeUsers(action.payload.users);
+      const sanitizedUser = sanitizeHydratedUser(action.payload.user, hydratedUsers);
+      return {
+        ...action.payload,
+        users: hydratedUsers,
+        user: sanitizedUser,
+        isAuthenticated: Boolean(sanitizedUser) && action.payload.isAuthenticated,
+        initialized: true,
+      };
     default:
       return state;
   }
@@ -103,10 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const rawUsers = window.localStorage.getItem(USERS_STORAGE_KEY);
       const parsedAuth = rawAuth ? (JSON.parse(rawAuth) as Partial<AuthState>) : null;
       const parsedUsers = rawUsers ? normalizeUsers(JSON.parse(rawUsers) as StoredUser[]) : [adminUser];
+      const hydratedUser = sanitizeHydratedUser(parsedAuth?.user ?? null, parsedUsers);
       return {
-        user: parsedAuth?.user ?? null,
-        isAuthenticated: parsedAuth?.isAuthenticated ?? false,
+        user: hydratedUser,
+        isAuthenticated: Boolean(hydratedUser) && (parsedAuth?.isAuthenticated ?? false),
         users: parsedUsers,
+        initialized: true,
       };
     } catch {
       return baseState;
@@ -136,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const users = normalizeUsers(await getUsuarios());
         if (users.length > 0) {
-          dispatch({ type: 'SET_USERS', payload: users });
+          dispatch({ type: 'INITIALIZE_USERS', payload: users });
         }
       } catch {
         return;
@@ -187,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: rawAuth ? (JSON.parse(rawAuth) as Partial<AuthState>).user ?? null : null,
             isAuthenticated: rawAuth ? (JSON.parse(rawAuth) as Partial<AuthState>).isAuthenticated ?? false : false,
             users: rawUsers ? (JSON.parse(rawUsers) as StoredUser[]) : [adminUser],
+            initialized: true,
           },
         });
       } catch {

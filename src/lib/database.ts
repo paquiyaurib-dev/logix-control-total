@@ -12,6 +12,51 @@ import type { Activo, Alerta, DespachoRecord, Material, Movimiento, Proveedor, T
 
 type UUID = string;
 
+const MATERIAL_UUID_MAP_KEY = 'logix-material-uuid-map';
+const USER_UUID_MAP_KEY = 'logix-user-uuid-map';
+const PROVEEDOR_UUID_MAP_KEY = 'logix-proveedor-uuid-map';
+
+function readUuidMap(storageKey: string): Record<string, UUID> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, UUID] => typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].length > 0)
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeUuidMap(storageKey: string, map: Record<string, UUID>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(storageKey, JSON.stringify(map));
+}
+
+function getMappedUuid(storageKey: string, value: number | string) {
+  const key = String(value);
+  const map = readUuidMap(storageKey);
+  return map[key];
+}
+
+function setMappedUuid(storageKey: string, value: number | string, uuid: UUID) {
+  const key = String(value);
+  const map = readUuidMap(storageKey);
+  if (map[key] === uuid) {
+    return;
+  }
+  map[key] = uuid;
+  writeUuidMap(storageKey, map);
+}
+
 type UsuarioRow = {
   id: UUID;
   username: string;
@@ -150,11 +195,21 @@ const toNumericId = (value: string) => {
   return digits ? Number(digits.slice(-12)) : Date.now();
 };
 
-const toUuidId = (value: number | string) => {
+const toUuidId = (value: number | string, storageKey?: string) => {
   if (typeof value === 'string' && value.includes('-')) {
     return value;
   }
-  return crypto.randomUUID();
+  if (storageKey) {
+    const mapped = getMappedUuid(storageKey, value);
+    if (mapped) {
+      return mapped;
+    }
+  }
+  const uuid = crypto.randomUUID();
+  if (storageKey) {
+    setMappedUuid(storageKey, value, uuid);
+  }
+  return uuid;
 };
 
 const parseWarehouseInventory = (datos: Record<string, unknown>): WarehouseInventory[] => {
@@ -320,12 +375,15 @@ async function selectAll<T>(table: string) {
 }
 
 export async function getUsuarios() {
-  return (await selectAll<UsuarioRow>('usuarios')).map(mapUserRow);
+  return (await selectAll<UsuarioRow>('usuarios')).map((row) => {
+    setMappedUuid(USER_UUID_MAP_KEY, row.id, row.id);
+    return mapUserRow(row);
+  });
 }
 
 export async function upsertUsuario(user: StoredUser) {
   const payload = {
-    id: toUuidId(user.id),
+    id: toUuidId(user.id, USER_UUID_MAP_KEY),
     username: user.username,
     password: user.password,
     nombre: user.nombre,
@@ -371,7 +429,11 @@ export async function loadAppData(defaultState: AppState): Promise<AppState> {
     inventoryCatalogs.map((row) => [String(row.datos.materialId ?? ''), parseWarehouseInventory(row.datos)])
   );
 
-  const materiales = materialRows.map((row) => mapMaterialRow(row, inventoryByMaterialId.get(row.id) ?? []));
+  const materiales = materialRows.map((row) => {
+    setMappedUuid(MATERIAL_UUID_MAP_KEY, toNumericId(row.id), row.id);
+    setMappedUuid(MATERIAL_UUID_MAP_KEY, row.id, row.id);
+    return mapMaterialRow(row, inventoryByMaterialId.get(row.id) ?? []);
+  });
   const materialesByUuid = new Map(materialRows.map((row, index) => [row.id, materiales[index]]));
   const vehiculos = vehiculoRows.map(mapVehiculoRow);
   const vehiculosByUuid = new Map(vehiculoRows.map((row, index) => [row.id, vehiculos[index]]));
@@ -401,7 +463,7 @@ export async function loadAppData(defaultState: AppState): Promise<AppState> {
 }
 
 export async function upsertMaterial(material: MaterialWithWarehouseInventory) {
-  const uuid = toUuidId(material.id);
+  const uuid = toUuidId(material.id, MATERIAL_UUID_MAP_KEY);
   const { error } = await supabase.from('materiales').upsert({
     id: uuid,
     codigo: material.codigo,
@@ -461,7 +523,7 @@ export async function replaceCatalog(tipo: string, items: CatalogItem[] | Moveme
 export async function replaceProveedores(proveedores: Proveedor[]) {
   const existing = await selectAll<ProveedorRow>('proveedores');
   const rows = proveedores.map((proveedor) => ({
-    id: toUuidId(proveedor.id),
+    id: toUuidId(proveedor.id, PROVEEDOR_UUID_MAP_KEY),
     ruc: proveedor.ruc,
     razon_social: proveedor.razonSocial,
     contacto: proveedor.contacto,
@@ -492,7 +554,7 @@ export async function addMovimiento(movimiento: Movimiento, materialUuid?: strin
     num_documento: movimiento.documento,
     clase_movimiento: movimiento.documento.split('-')[0] || '',
     proveedor: movimiento.proveedor ?? null,
-    material_id: materialUuid ?? null,
+    material_id: materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, movimiento.materialId) ?? null,
     descripcion: movimiento.materialDescripcion,
     cantidad: movimiento.cantidad,
     num_vale: movimiento.documento,
@@ -505,6 +567,28 @@ export async function addMovimiento(movimiento: Movimiento, materialUuid?: strin
   });
   if (error) {
     throw error;
+  }
+
+  // Update stock_actual in materiales
+  const resolvedMaterialUuid = materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, movimiento.materialId);
+  if (resolvedMaterialUuid) {
+    const { data: currentMaterial } = await supabase
+      .from('materiales')
+      .select('stock_actual')
+      .eq('id', resolvedMaterialUuid)
+      .single();
+
+    if (currentMaterial) {
+      const currentStock = currentMaterial.stock_actual || 0;
+      const newStock = movimiento.tipo === 'ingreso'
+        ? currentStock + movimiento.cantidad
+        : currentStock - movimiento.cantidad;
+
+      await supabase
+        .from('materiales')
+        .update({ stock_actual: newStock })
+        .eq('id', resolvedMaterialUuid);
+    }
   }
 }
 
@@ -571,7 +655,7 @@ export async function upsertAlerta(alerta: Alerta) {
 export async function addDespacho(despacho: DespachoRecord, materialUuid?: string) {
   const { error } = await supabase.from('despachos').insert({
     id: toUuidId(despacho.id),
-    material_id: materialUuid ?? null,
+    material_id: materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, despacho.materialId) ?? null,
     descripcion: despacho.materialDescripcion,
     cantidad: despacho.cantidad,
     labor: despacho.labor,
@@ -583,6 +667,24 @@ export async function addDespacho(despacho: DespachoRecord, materialUuid?: strin
   });
   if (error) {
     throw error;
+  }
+
+  // Update stock_actual in materiales (despacho = salida, siempre restar)
+  const resolvedMaterialUuid = materialUuid ?? getMappedUuid(MATERIAL_UUID_MAP_KEY, despacho.materialId);
+  if (resolvedMaterialUuid) {
+    const { data: currentMaterial } = await supabase
+      .from('materiales')
+      .select('stock_actual')
+      .eq('id', resolvedMaterialUuid)
+      .single();
+
+    if (currentMaterial) {
+      const newStock = (currentMaterial.stock_actual || 0) - despacho.cantidad;
+      await supabase
+        .from('materiales')
+        .update({ stock_actual: newStock })
+        .eq('id', resolvedMaterialUuid);
+    }
   }
 }
 
