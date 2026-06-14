@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { StoredUser } from '../context/AuthContext';
 import type {
   AppState,
@@ -735,4 +736,42 @@ export async function deletePersonal(personalId: number) {
 
 export async function appendAuditEntry(_entry: AuditEntry) {
   return Promise.resolve();
+}
+
+const REALTIME_TABLES = [
+  'materiales',
+  'movimientos',
+  'activos',
+  'vehiculos',
+  'tareos',
+  'alertas',
+  'catalogos',
+  'despachos',
+  'proveedores',
+  'personal',
+] as const;
+
+export function subscribeToAppDataChanges(onChange: () => void): RealtimeChannel {
+  const channel = supabase.channel(`logix-db-sync-${crypto.randomUUID()}`);
+
+  REALTIME_TABLES.forEach((table) => {
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table,
+      },
+      () => {
+        onChange();
+      }
+    );
+  });
+
+  channel.subscribe();
+  return channel;
+}
+
+export async function unsubscribeFromAppDataChanges(channel: RealtimeChannel) {
+  await supabase.removeChannel(channel);
 }

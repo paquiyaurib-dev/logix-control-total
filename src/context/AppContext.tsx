@@ -29,6 +29,8 @@ import {
   loadAppData,
   replaceCatalog,
   replaceProveedores,
+  subscribeToAppDataChanges,
+  unsubscribeFromAppDataChanges,
   upsertActivo,
   upsertAlerta,
   upsertMaterial,
@@ -422,6 +424,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const remoteLoadedRef = useRef(false);
+  const isHydratingRef = useRef(false);
+  const lastRemoteSyncRef = useRef(0);
   const [state, dispatch] = useReducer(
     appReducer,
     initialState,
@@ -476,18 +480,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const hydrateFromSupabase = async () => {
+    const hydrateFromSupabase = async (force = false) => {
+      if (isHydratingRef.current) {
+        return;
+      }
+      if (!force && Date.now() - lastRemoteSyncRef.current < 500) {
+        return;
+      }
+      isHydratingRef.current = true;
       try {
         const remoteState = await loadAppData(initialState);
+        lastRemoteSyncRef.current = Date.now();
         dispatch({ type: 'HYDRATE', payload: remoteState });
       } catch {
         return;
       } finally {
+        isHydratingRef.current = false;
         remoteLoadedRef.current = true;
       }
     };
 
-    void hydrateFromSupabase();
+    void hydrateFromSupabase(true);
+
+    const channel = subscribeToAppDataChanges(() => {
+      void hydrateFromSupabase(true);
+    });
+
+    return () => {
+      void unsubscribeFromAppDataChanges(channel);
+    };
   }, []);
 
   useEffect(() => {
