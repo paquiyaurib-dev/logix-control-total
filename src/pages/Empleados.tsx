@@ -127,10 +127,6 @@ export default function Empleados() {
     }
 
     await savePersonal(updatedList);
-    // Also upsert each to Supabase
-    for (const p of updatedList) {
-      await addPersonal(p);
-    }
     setImportResult(`Se importaron ${added} empleados nuevos, se actualizaron ${updated}`);
     setTimeout(() => setImportResult(''), 5000);
     if (fileInputRef.current) fileInputRef.current.value = '';

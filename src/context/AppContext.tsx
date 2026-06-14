@@ -832,7 +832,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const addPersonal = async (p: Personal) => {
-    dispatch({ type: 'SET_PERSONAL', payload: [...state.personal, p] });
+    const exists = state.personal.find((item) => item.dni === p.dni);
+    if (exists) {
+      const updated = state.personal.map((item) => item.dni === p.dni ? { ...item, ...p } : item);
+      dispatch({ type: 'SET_PERSONAL', payload: updated });
+    } else {
+      dispatch({ type: 'SET_PERSONAL', payload: [...state.personal, p] });
+    }
     try {
       await upsertPersonal(p);
     } catch {
@@ -841,6 +847,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
   const savePersonal = async (personal: Personal[]) => {
     dispatch({ type: 'SET_PERSONAL', payload: personal });
+    try {
+      for (const p of personal) {
+        await upsertPersonal(p);
+      }
+    } catch {
+      return;
+    }
   };
   const deletePersonal = async (personalId: number) => {
     dispatch({ type: 'SET_PERSONAL', payload: state.personal.filter((item) => item.id !== personalId) });

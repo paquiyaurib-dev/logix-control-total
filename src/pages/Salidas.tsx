@@ -34,7 +34,12 @@ export default function Salidas() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [dniSearch, setDniSearch] = useState('');
   const [foundPersonal, setFoundPersonal] = useState<Personal | null>(null);
+  const [supervisorDni, setSupervisorDni] = useState('');
+  const [foundSupervisor, setFoundSupervisor] = useState<Personal | null>(null);
+  const [bodegueroDni, setBodegueroDni] = useState('');
+  const [foundBodeguero, setFoundBodeguero] = useState<Personal | null>(null);
   const [showNewPersonalModal, setShowNewPersonalModal] = useState(false);
+  const [newPersonalModalTarget, setNewPersonalModalTarget] = useState<'solicitante' | 'supervisor' | 'bodeguero'>('solicitante');
   const [newPersonalForm, setNewPersonalForm] = useState({ dni: '', nombres: '', apellidos: '', cargo: '', area: '' });
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
@@ -85,6 +90,40 @@ export default function Salidas() {
     }
   };
 
+  const handleSupervisorDni = (dni: string) => {
+    setSupervisorDni(dni);
+    if (dni.length === 8) {
+      const found = state.personal.find((p) => p.dni === dni);
+      if (found) {
+        setFoundSupervisor(found);
+        setForm((f) => ({ ...f, supervisor: `${found.nombres} ${found.apellidos}` }));
+      } else {
+        setFoundSupervisor(null);
+        setForm((f) => ({ ...f, supervisor: '' }));
+      }
+    } else {
+      setFoundSupervisor(null);
+      setForm((f) => ({ ...f, supervisor: '' }));
+    }
+  };
+
+  const handleBodegueroDni = (dni: string) => {
+    setBodegueroDni(dni);
+    if (dni.length === 8) {
+      const found = state.personal.find((p) => p.dni === dni);
+      if (found) {
+        setFoundBodeguero(found);
+        setForm((f) => ({ ...f, bodeguero: `${found.nombres} ${found.apellidos}` }));
+      } else {
+        setFoundBodeguero(null);
+        setForm((f) => ({ ...f, bodeguero: '' }));
+      }
+    } else {
+      setFoundBodeguero(null);
+      setForm((f) => ({ ...f, bodeguero: '' }));
+    }
+  };
+
   const handleCreatePersonal = async () => {
     const p: Personal = {
       id: Date.now(),
@@ -96,9 +135,19 @@ export default function Salidas() {
       activo: true,
     };
     await addPersonal(p);
-    setFoundPersonal(p);
-    setDniSearch(p.dni);
-    setForm((f) => ({ ...f, solicitante: `${p.dni} - ${p.nombres} ${p.apellidos} (${p.cargo})` }));
+    if (newPersonalModalTarget === 'solicitante') {
+      setFoundPersonal(p);
+      setDniSearch(p.dni);
+      setForm((f) => ({ ...f, solicitante: `${p.dni} - ${p.nombres} ${p.apellidos} (${p.cargo})` }));
+    } else if (newPersonalModalTarget === 'supervisor') {
+      setFoundSupervisor(p);
+      setSupervisorDni(p.dni);
+      setForm((f) => ({ ...f, supervisor: `${p.nombres} ${p.apellidos}` }));
+    } else if (newPersonalModalTarget === 'bodeguero') {
+      setFoundBodeguero(p);
+      setBodegueroDni(p.dni);
+      setForm((f) => ({ ...f, bodeguero: `${p.nombres} ${p.apellidos}` }));
+    }
     setShowNewPersonalModal(false);
     setNewPersonalForm({ dni: '', nombres: '', apellidos: '', cargo: '', area: '' });
   };
@@ -134,6 +183,10 @@ export default function Salidas() {
     setTimeout(() => setSuccess(false), 3000);
     setDniSearch('');
     setFoundPersonal(null);
+    setSupervisorDni('');
+    setFoundSupervisor(null);
+    setBodegueroDni('');
+    setFoundBodeguero(null);
     setForm({
       ...form,
       materialId: '',
@@ -544,43 +597,72 @@ export default function Salidas() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Bodeguero</label>
-            <input
-              value={form.bodeguero}
-              onChange={(e) => setForm({ ...form, bodeguero: e.target.value })}
-              className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Supervisor</label>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Bodeguero (DNI)</label>
             <div className="flex gap-2">
-              <select
-                value={form.supervisor}
-                onChange={(e) => setForm({ ...form, supervisor: e.target.value })}
+              <input
+                value={bodegueroDni}
+                onChange={(e) => handleBodegueroDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="DNI del bodeguero..."
+                maxLength={8}
                 className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
-              >
-                <option value="">Seleccionar...</option>
-                {state.supervisores.map((supervisor) => (
-                  <option key={supervisor.id} value={supervisor.nombre}>
-                    {supervisor.nombre}
-                  </option>
-                ))}
-              </select>
+              />
               <button
                 type="button"
-                onClick={() => setCatalogModal('supervisor')}
+                onClick={() => {
+                  setNewPersonalModalTarget('bodeguero');
+                  setNewPersonalForm({ dni: bodegueroDni, nombres: '', apellidos: '', cargo: 'Bodeguero', area: '' });
+                  setShowNewPersonalModal(true);
+                }}
                 className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
+                title="Registrar nuevo personal"
               >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() => openCatalogManager('supervisor')}
-                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#1B2A4A] hover:bg-gray-50"
-              >
-                <Settings className="w-4 h-4 mx-auto" />
+                <UserPlus className="w-4 h-4 mx-auto" />
               </button>
             </div>
+            {foundBodeguero && (
+              <div className="mt-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                ✓ {foundBodeguero.nombres} {foundBodeguero.apellidos} — {foundBodeguero.cargo}
+              </div>
+            )}
+            {bodegueroDni.length === 8 && !foundBodeguero && (
+              <div className="mt-1 text-xs text-orange-600 bg-orange-50 rounded px-2 py-1">
+                DNI no encontrado.
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Supervisor (DNI)</label>
+            <div className="flex gap-2">
+              <input
+                value={supervisorDni}
+                onChange={(e) => handleSupervisorDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                placeholder="DNI del supervisor..."
+                maxLength={8}
+                className="w-full border border-[#E2E6EF] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E8672C]/30"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPersonalModalTarget('supervisor');
+                  setNewPersonalForm({ dni: supervisorDni, nombres: '', apellidos: '', cargo: 'Supervisor', area: '' });
+                  setShowNewPersonalModal(true);
+                }}
+                className="shrink-0 w-10 rounded-lg border border-[#E2E6EF] text-[#E8672C] hover:bg-[#E8672C]/5"
+                title="Registrar nuevo personal"
+              >
+                <UserPlus className="w-4 h-4 mx-auto" />
+              </button>
+            </div>
+            {foundSupervisor && (
+              <div className="mt-1 text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                ✓ {foundSupervisor.nombres} {foundSupervisor.apellidos} — {foundSupervisor.cargo}
+              </div>
+            )}
+            {supervisorDni.length === 8 && !foundSupervisor && (
+              <div className="mt-1 text-xs text-orange-600 bg-orange-50 rounded px-2 py-1">
+                DNI no encontrado.
+              </div>
+            )}
           </div>
           <div className="md:col-span-2 lg:col-span-4">
             <label className="block text-xs font-medium text-[#6B7A99] uppercase tracking-wider mb-1">Observaciones</label>
